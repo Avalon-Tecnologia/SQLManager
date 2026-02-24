@@ -1,13 +1,15 @@
 ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #1 / made by: Nicolas Santos / created: 23/02/2026 '''
 
 from functools import wraps
-from typing    import Optional, Union, Callable
+from typing    import Optional, Union, Callable, TYPE_CHECKING
 
-from ..BaseEnumController import BaseEnumController
-from ..EDTController      import EDTController
-from ..TableController    import TableController
+from ..BaseEnumController  import BaseEnumController
+from ..EDTController       import EDTController
 
-from ._conditions_Managers      import FieldCondition, BinaryExpression
+from ._conditions_Managers import FieldCondition, BinaryExpression
+
+if TYPE_CHECKING:
+    from ..TableController import TableController
 
 class UpdateManager:
     """
@@ -34,7 +36,7 @@ class UpdateManager:
         return wrapper
     
     @validate_update
-    def update(controller: TableController, _values) -> bool:
+    def update(controller: 'TableController', _values) -> bool:
         """
         Atualiza um registro existente na tabela
         Returns:
@@ -85,7 +87,7 @@ class UpdateManager:
         except Exception as error:            
             raise Exception(f"Erro ao atualizar registro: {error}")
     
-    def update_recordset(controller: TableController, where: Optional[Union[FieldCondition, BinaryExpression]] = None, **fields) -> int:
+    def update_recordset(controller: 'TableController', where: Optional[Union[FieldCondition, BinaryExpression]] = None, **fields) -> int:
         """
         Atualiza múltiplos registros em massa
         Args:

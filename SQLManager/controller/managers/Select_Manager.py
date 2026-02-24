@@ -1,15 +1,16 @@
 ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #1 / made by: Nicolas Santos / created: 23/02/2026 '''
-
-from ast import alias
 import weakref
 import sys
 
-from typing import Any, List, Dict, Optional, Union, Callable
+from typing import Any, List, Dict, Optional, Union, Callable, TYPE_CHECKING
 
-from ..BaseEnumController import BaseEnumController
-from ..EDTController      import EDTController
-from ..TableController    import TableController
-from ._conditions_Managers      import FieldCondition, BinaryExpression
+from ..BaseEnumController  import BaseEnumController
+from ..EDTController       import EDTController
+
+from ._conditions_Managers import FieldCondition, BinaryExpression
+
+if TYPE_CHECKING:
+    from ..TableController import TableController
 
 class AutoExecuteWrapper:
     '''Wrapper que delega métodos para SelectManager mas auto-executa quando não há mais encadeamento'''
@@ -103,7 +104,7 @@ class AutoExecuteWrapper:
 class SelectManager:
     '''Gerencia operações SELECT com API fluente - Auto-executa quando a cadeia termina'''
     
-    def __init__(self, table_controller: TableController):
+    def __init__(self, table_controller: 'TableController'):
         self._controller = table_controller
 
         self._where_conditions:  Optional[Union[FieldCondition, BinaryExpression]]  = None

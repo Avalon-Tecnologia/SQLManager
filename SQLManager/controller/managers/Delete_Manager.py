@@ -1,10 +1,12 @@
 ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #1 / made by: Nicolas Santos / created: 23/02/2026 '''
 
 from functools import wraps
-from typing    import Optional, Union, Callable
+from typing    import Optional, Union, Callable, TYPE_CHECKING
 
-from ._conditions_Managers   import FieldCondition, BinaryExpression
-from ..TableController import TableController
+from ._conditions_Managers import FieldCondition, BinaryExpression
+
+if TYPE_CHECKING:
+    from ..TableController import TableController
 
 class AutoExecuteDeleteWrapper:
     '''Wrapper para DeleteRecordsetManager que auto-executa'''
@@ -37,7 +39,7 @@ class AutoExecuteDeleteWrapper:
 class DeleteRecordsetManager:
     '''Gerencia operações DELETE em massa com API fluente - Auto-executa quando a cadeia termina'''
     
-    def __init__(self, table_controller: TableController):
+    def __init__(self, table_controller: 'TableController'):
         self._where_conditions: Optional[Union[FieldCondition, BinaryExpression]] = None
 
         self._controller   = table_controller        

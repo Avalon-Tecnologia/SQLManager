@@ -1,11 +1,13 @@
 ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #1 / made by: Nicolas Santos / created: 23/02/2026 '''
 
 from functools import wraps
-from typing    import Any, Optional, Union, Callable, List, Dict
+from typing    import Any, Optional, Union, Callable, List, Dict, TYPE_CHECKING
 
-from ..BaseEnumController import BaseEnumController
-from ..EDTController      import EDTController
-from ..TableController    import TableController
+from ..BaseEnumController  import BaseEnumController
+from ..EDTController       import EDTController
+
+if TYPE_CHECKING:
+    from ..TableController import TableController
 
 class InsertRecordsetWrapper:
     """Wrapper que permite uso com ou sem .where()"""
@@ -29,7 +31,7 @@ class InsertRecordsetManager:
     """
     Gerencia operações INSERT em massa com suporte a WHERE (filtro condicional)
     """
-    def __init__(self, controller: TableController, source_data: Union[List[tuple], List[Dict], List[Any]], columns: Optional[List[str]] = None):
+    def __init__(self, controller: 'TableController', source_data: Union[List[tuple], List[Dict], List[Any]], columns: Optional[List[str]] = None):
         self._controller        = controller
         self._raw_data          = source_data
         self._columns           = columns

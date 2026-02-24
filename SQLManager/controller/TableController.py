@@ -2,7 +2,6 @@
 
 from typing              import Any, List, Dict, Optional, Union
 
-from threading           import Lock
 from ..connection        import database_connection as data, Transaction
 from .EDTController      import EDTController
 from .BaseEnumController import BaseEnumController
