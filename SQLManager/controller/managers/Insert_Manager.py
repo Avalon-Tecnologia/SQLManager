@@ -304,6 +304,4 @@ class InsertManager:
         manager = InsertRecordsetManager(controller, source_data, columns)
         return InsertRecordsetWrapper(manager)
 
-    AutoExecuteInsertWrapper = InsertRecordsetWrapper
-
 ''' [END CODE] Project: SQLManager Version 4.0 / issue: #1 / made by: Nicolas Santos / created: 23/02/2026 '''
