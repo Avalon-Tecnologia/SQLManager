@@ -32,6 +32,7 @@ class CoreConfig:
     _db_driver: str = "ODBC Driver 18 for SQL Server"
     
     _custom_regex: Dict[str, str] = {}
+    _router_config: Dict[str, Any] = {}
     
     _is_configured: bool = False
     
@@ -133,6 +134,28 @@ class CoreConfig:
         cls._custom_regex.update(regex_dict)
     
     @classmethod
+    def configure_router(cls, config: Dict[str, Any]):
+        """
+        Configura o módulo AutoRouter (Rotas Dinâmicas)
+        
+        Args:
+            config: Dicionário de configuração do AutoRouter
+            
+        Exemplo:
+            CoreConfig.configure_router({
+                'enable_dynamic_routes': True,
+                'url_suffix': 'api/v1',
+                'exclude_tables': ['SysLog']
+            })
+        """
+        cls._router_config = config
+
+    @classmethod
+    def get_router_config(cls) -> Dict[str, Any]:
+        """Retorna a configuração atual do AutoRouter"""
+        return cls._router_config
+
+    @classmethod
     def get_regex(cls, regex_id: str) -> Optional[str]:
         """
         Obtém um padrão regex customizado
@@ -164,6 +187,7 @@ class CoreConfig:
         cls._db_password = None
         cls._db_driver = "ODBC Driver 18 for SQL Server"
         cls._custom_regex = {}
+        cls._router_config = {}
         cls._is_configured = False
     
     @classmethod
@@ -197,3 +221,6 @@ class CoreConfig:
         
         if 'custom_regex' in config:
             cls.register_multiple_regex(config['custom_regex'])
+            
+        if 'router_config' in config:
+            cls.configure_router(config['router_config'])
