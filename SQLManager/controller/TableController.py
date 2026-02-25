@@ -1,12 +1,11 @@
 ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #1 / made by: Nicolas Santos / created: 23/02/2026 '''
 
+from __future__ import annotations
 from typing              import Any, List, Dict, Optional, Union
 
 from ..connection        import database_connection as data, Transaction
 from .EDTController      import EDTController
 from .BaseEnumController import BaseEnumController
-
-from .managers           import *
 
 class TableController():
     """
@@ -63,7 +62,8 @@ class TableController():
         self.isUpdate = False
         self._pending_wrapper = None  # Rastreia wrapper pendente de execução
 
-        self.__select_manager = SelectManager(self)        
+        from .managers import SelectManager
+        self.__select_manager = SelectManager(self)
 
     def __getattribute__(self, name: str):
         '''
@@ -142,10 +142,12 @@ class TableController():
 
     def insert(self) -> bool:
         """Insere um novo registro na tabela"""
+        from .managers import InsertManager
         return InsertManager.insert(self)
     
     def insert_recordset(self, source_data: Union[List[tuple], List[Dict], List[Any]], columns: Optional[List[str]] = None) -> InsertRecordsetWrapper:
         """Insere múltiplos registros em massa (auto-executa ou use .where())"""
+        from .managers import InsertManager
         return InsertManager.insert_recordset(self, source_data, columns)
 
     def update(self) -> bool:
@@ -160,6 +162,7 @@ class TableController():
                 continue
             values[0][key] = attr.value
 
+        from .managers import UpdateManager
         ret = UpdateManager.update(self, values)
 
         self.isUpdate = False
@@ -174,10 +177,12 @@ class TableController():
 
     def update_recordset(self, where: Optional[Union[FieldCondition, BinaryExpression]] = None, **fields) -> int:
         """Atualiza múltiplos registros em massa"""
+        from .managers import UpdateManager
         return UpdateManager.update_recordset(self, where, **fields)
 
     def delete(self) -> bool:
         """Exclui um registro da tabela"""
+        from .managers import DeleteManager
         return DeleteManager.delete(self)
     
     def delete_from(self) -> 'DeleteRecordsetManager':
@@ -193,10 +198,12 @@ class TableController():
         Returns:
             DeleteRecordsetManager: Manager para construir a query de deleção
         """
+        from .managers import DeleteManager
         return DeleteManager.delete_from(self)
     
     def select(self) -> "SelectManager":
         # Retorna o SelectManager diretamente, sem wrapper
+        from .managers import SelectManager
         return SelectManager(self)
 
     def field(self, name: str):
@@ -366,6 +373,7 @@ class TableController():
         Returns:
             bool: True se existir pelo menos um registro, False caso contrário.
         '''
+        from .managers import SelectManager
         select_mgr = self.select().where(where).limit(1).do_update(False)
         select_mgr.execute()
 
