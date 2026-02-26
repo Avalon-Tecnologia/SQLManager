@@ -48,11 +48,13 @@ class REGEX (EDT_Utils):
             custom_pattern = CoreConfig.get_regex(regex_id)
             return re.compile(custom_pattern) if custom_pattern else None
         
+        ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 23/02/2026 '''
         patterns: Dict[str, str] = {
             "BigInt": r"^\d+n$",
-            "bool": r"^[01]$",
+            "bool": r"^(0|1|True|False|true|false)$",
             "any": r"^.*$",
-            "binary": r"^(1|0)+$",
+            "binary": r"^(1|0)+$",            
+            'float': r'^-?\d+(\.\d+)?$',
             "cnpj_cpf": r"^([0-9A-Z]{2}[\.]?[0-9A-Z]{3}[\.]?[0-9A-Z]{3}[\/]?[0-9A-Z]{4}[-]?[0-9]{2})$|^([0-9]{3}[\.]?[0-9]{3}[\.]?[0-9]{3}[-]?[0-9]{2})$",
             "cnpj": r"^([0-9A-Z]{2}[\.]?[0-9A-Z]{3}[\.]?[0-9A-Z]{3}[\/]?[0-9A-Z]{4}[-]?[0-9]{2})$",
             "cpf": r"^([0-9]{3}[\.]?[0-9]{3}[\.]?[0-9]{3}[-]?[0-9]{2})$",
@@ -69,6 +71,7 @@ class REGEX (EDT_Utils):
             "password": r"^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$",
             "url": r"^(https?:\/\/)?([\w.-]+)\.([a-z]{2,})([\/\w.-]*)*\/?$",
         }
+        ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 23/02/2026 '''
         
         pattern = patterns.get(regex_id)
         return re.compile(pattern) if pattern else None    
@@ -149,7 +152,8 @@ class EDTController(EDT_Utils, OperationManager):
         if self.type_id is not None:
             expected_type = self.type_id.value if hasattr(self.type_id, 'value') else self.type_id
             if isinstance(expected_type, type):
-                if not isinstance(edt_value, expected_type):
+                is_bool_int = expected_type is bool and isinstance(edt_value, int) and edt_value in (0, 1)
+                if not isinstance(edt_value, expected_type) and not is_bool_int:
                     raise ValueError(
                         f"\nValor {SystemController.custom_text(edt_value, 'blue')} "
                         f"deve ser do tipo {SystemController.custom_text(expected_type.__name__, 'red', False, True)} "
@@ -157,7 +161,7 @@ class EDTController(EDT_Utils, OperationManager):
                     )
         
         # Pula validação de regex para tipos nativos datetime/date/time do Python
-        skip_regex_validation = isinstance(edt_value, (datetime, date, time))
+        skip_regex_validation = isinstance(edt_value, (datetime, date, time, bool))
         
         # Valida regex apenas se não for um tipo datetime nativo
         if not skip_regex_validation and not self.regex.is_valid(edt_value):

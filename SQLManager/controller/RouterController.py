@@ -68,27 +68,28 @@ class AutoRouter:
         Retorna um mapa {NOME_CAMPO_UPPER: NomeRealDoAtributo} para a tabela.
         Cacheado por nome da tabela.
         """
-        t_name = table.table_name.upper()
+        t_name = table.source_name.upper()
         if t_name in self._field_map_cache:
             return self._field_map_cache[t_name]
         
         field_map = {}
         # Atributos internos a ignorar
         ignore = {
-            'db', 'table_name', 'records', 'Columns', 'Indexes', 'ForeignKeys', 
+            'db', 'source_name', 'table_name', 'records', 'Columns', 'Indexes', 'ForeignKeys', 
             'isUpdate', 'controller', 'select', 'insert', 'update', 'delete',
             'insert_recordset', 'update_recordset', 'delete_from', 'field',
             'exists', 'validate_fields', 'validate_write', 'clear', 'set_current',
-            'get_table_columns', 'get_table_index', 'get_table_foreign_keys', 'get_table_total'
+            'get_table_columns', 'get_table_index', 'get_table_foreign_keys', 'get_table_total',
+
+            'SelectForUpdate', 'get_columns_with_defaults'
         }
         
         # Inspeciona a instância para encontrar campos válidos (EDTs/Enums/Values)
-        for attr in dir(table):
+        for attr, val in table.__dict__.items():
             if attr.startswith('_') or attr in ignore:
                 continue
             
             try:
-                val = getattr(table, attr)
                 if callable(val): continue
                 field_map[attr.upper()] = attr
             except:
@@ -180,8 +181,8 @@ class AutoRouter:
         # Rota: GET /{table}/{id}
         if path_parts and path_parts[0].isdigit():
             recid = int(path_parts[0])
-            if table.exists(table.RECID == recid):
-                result = table.select().where(table.RECID == recid).execute()
+            if table.exists(table.field('RECID') == recid):
+                result = table.select().where(table.field('RECID') == recid).execute()
                 if result:
                     return {"status": 200, "data": self._serialize(result[0], field_map)}
             return {"status": 404, "error": "Record not found"}
@@ -236,10 +237,10 @@ class AutoRouter:
             real_field_name = field_map.get(field_name_raw.upper())
             
             if real_field_name:
-                field_attr = getattr(table, real_field_name)
+                field_attr = table.field(real_field_name)
                 
                 # Aplica filtro
-                if operator == 'eq': query.where(field_attr == value)
+                if operator == 'eq': query.where(field_attr == value) # type: ignore
                 elif operator == 'gt': query.where(field_attr > value)
                 elif operator == 'gte': query.where(field_attr >= value)
                 elif operator == 'lt': query.where(field_attr < value)
@@ -247,7 +248,7 @@ class AutoRouter:
                 elif operator == 'neq': query.where(field_attr != value)
                 elif operator == 'like': query.where(field_attr.like(str(value)))
 
-        # Executa query paginada
+        # Executa query paginada # type: ignore
         query.limit(limit).offset(offset)
         results = query.execute()
         
@@ -262,10 +263,13 @@ class AutoRouter:
     def _handle_post(self, table: TableController, body: Dict):
         field_map = self._get_field_map(table)
         
-        for key, value in body.items():
-            real_field_name = field_map.get(key.upper())
-            if real_field_name:
-                setattr(table, real_field_name, value)
+        try:
+            for key, value in body.items():
+                real_field_name = field_map.get(key.upper())
+                if real_field_name:
+                    setattr(table, real_field_name, value)
+        except Exception as e:
+            return {"status": 400, "error": str(e)}
         
         try:
             if table.insert():
@@ -279,7 +283,7 @@ class AutoRouter:
         if not recid.isdigit(): return {"status": 400, "error": "Invalid ID"}
         recid = int(recid)
         
-        if not table.exists(table.RECID == recid):
+        if not table.exists(table.field('RECID') == recid):
             return {"status": 404, "error": "Record not found"}
         
         try:
@@ -289,12 +293,14 @@ class AutoRouter:
             for key, value in body.items():
                 real_field_name = field_map.get(key.upper())
                 if real_field_name and real_field_name != 'RECID':
+                    # Valida o valor usando o setter do EDTController (lança erro se inválido)
+                    setattr(table, real_field_name, value)
                     valid_fields[real_field_name] = value
             
             if not valid_fields:
                 return {"status": 400, "error": "No valid fields provided for update"}
 
-            affected = table.update_recordset(where=table.RECID == recid, **valid_fields)
+            affected = table.update_recordset(where=table.field('RECID') == recid, **valid_fields)
             
             if affected > 0:
                 return {"status": 200, "message": "Updated successfully"}
@@ -319,7 +325,7 @@ class AutoRouter:
         
         recid = int(recid)
         
-        if not table.exists(table.RECID == recid):
+        if not table.exists(table.field('RECID') == recid):
             return {"status": 404, "error": "Record not found"}
 
         behavior = config.get('delete_behavior', {'mode': 'physical'})
@@ -328,9 +334,9 @@ class AutoRouter:
             if behavior.get('mode') == 'logical':
                 field = behavior.get('field', 'IS_DELETED')
                 value = behavior.get('value', 1)
-                table.update_recordset(where=table.RECID == recid, **{field: value})
+                table.update_recordset(where=table.field('RECID') == recid, **{field: value})
             else:
-                table.delete_from().where(table.RECID == recid).execute()
+                table.delete_from().where(table.field('RECID') == recid).execute()
             
             return {"status": 200, "message": "Deleted successfully"}
         except Exception as e:
