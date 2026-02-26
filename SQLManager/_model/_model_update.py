@@ -18,7 +18,9 @@ class utils:
         '''Limpa arquivos __init__.py antes de importar'''
         if _root_dir is None:
             _root_dir = ROOT_DIR
+            
         model_path = _root_dir / "src" / "model"
+
         init_files = [
             model_path / "EDTs" / "__init__.py",
             model_path / "enum" / "__init__.py",

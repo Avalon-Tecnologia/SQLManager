@@ -48,7 +48,7 @@ git+https://github.com/nickzsd/SQLManager.git
 > **ATENÇÃO:** O `pip install` executa automaticamente o gerador de modelos durante a instalação. Certifique-se de que:
 > - Seu arquivo `.env` está configurado com as credenciais do banco de dados (variáveis: `DB_SERVER`, `DB_DATABASE`, `DB_USER`, `DB_PASSWORD`)
 > - A pasta `src/` existe na raiz do seu projeto
-> - Todas as tabelas e views no banco possuem o campo `RECID` (tipo BIGINT)
+> - Todas as tabelas e views e views no banco possuem o campo `RECID` (tipo BIGINT)
 >
 > **Exemplo do arquivo `.env`:**
 > ```env
@@ -77,10 +77,11 @@ Esse comando irá criar (ou atualizar) automaticamente as seguintes pastas e arq
 - src/model/enum/    → Enums customizados (tipos enumerados)
 - src/model/tables/  → Classes de tabelas baseadas no banco
 - src/model/views/   → Classes de views baseadas no banco
+- src/model/views/   → Classes de views baseadas no banco
 
 > **Importante:**
 > - O Enum `DataType` e o EDT `Recid` são obrigatórios e sempre serão gerados automaticamente.
-> - O gerador sincroniza os campos das tabelas e views do banco com os arquivos Python.
+> - O gerador sincroniza os campos das tabelas e views e views do banco com os arquivos Python.
 > - Não edite manualmente arquivos gerados, exceto para customizações documentadas.
 
 ## Importação do Pacote
@@ -91,7 +92,7 @@ Após instalar, use:
 from SQLManager import connection, controller, CoreConfig
 # ou
 from SQLManager.connection import database_connection
-from SQLManager.controller import EDTController, TableController, ViewController
+from SQLManager.controller import EDTController, TableController, ViewController, TableController, ViewController
 ```
 
 ## Atualizando o SQLManager
@@ -115,6 +116,9 @@ pip install --upgrade --force-reinstall git+https://github.com/nickzsd/SQLManage
 > Issue: [#4-ViewController](https://github.com/nickzsd/SQLManager/issues/4)  
 > Solution [Development document](SQLManager/documents/Issues/Issue4_Note.md)
 
+> Issue: [#4-ViewController](https://github.com/nickzsd/SQLManager/issues/4)  
+> Solution [Development document](SQLManager/documents/Issues/Issue4_Note.md)
+
 ### Versão 2.0.0 (12/01/2026)
 
 **BREAKING CHANGES:**
@@ -124,6 +128,7 @@ pip install --upgrade --force-reinstall git+https://github.com/nickzsd/SQLManage
 - JOIN simplificado com `.on()` e operadores
 
 **NOVIDADES:**
+- ViewController: Suporte completo para views de banco de dados (issue #4)
 - ViewController: Suporte completo para views de banco de dados (issue #4)
 - Operadores sobrecarregados: `==`, `!=`, `<`, `<=`, `>`, `>=`, `.in_()`, `.like()`
 - Operadores lógicos: `&` (AND), `|` (OR)
@@ -164,6 +169,11 @@ Para detalhes completos: [PatchNote_2.0.md](SQLManager/documents/PatchNote_2.0.m
 ---
 
 ### Controllers - Controladoras
+
+O SQLManager fornece duas controllers principais para gerenciamento de dados:
+
+- **TableController**: Para operações completas em tabelas (SELECT, INSERT, UPDATE, DELETE)
+- **ViewController**: Para operações de leitura em views (SELECT)
 
 Para documentação detalhada das controllers (TableController, ViewController), métodos e exemplos, consulte:
 

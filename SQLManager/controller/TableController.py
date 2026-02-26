@@ -1,5 +1,4 @@
 ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #1 / made by: Nicolas Santos / created: 23/02/2026 '''
-from __future__ import annotations
 from typing              import Any, List, Dict, Optional, Union
 
 from ..connection        import database_connection as data, Transaction
@@ -77,6 +76,8 @@ class TableController():
 
     ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
 
+    ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
+
     def __getattribute__(self, name: str):
         '''
         Intercepta acesso aos campos:
@@ -85,7 +86,7 @@ class TableController():
         - Se houver query pendente, executa antes de retornar o campo
         '''
         protected_attrs = {
-            'db', 'source_name', 'table_name', 'records', 'Columns', 'Indexes', 'ForeignKeys',
+            'db', 'source_name', 'source_name', 'records', 'Columns', 'Indexes', 'ForeignKeys',
             '_where_conditions', '_columns', '_joins', '_order_by', '_limit',
             '_offset', '_group_by', '_having_conditions', '_distinct', '_do_update',
             'controller', '__class__', '__dict__', 'isUpdate', '_pending_wrapper',
@@ -126,7 +127,7 @@ class TableController():
     ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
     def __setattr__(self, name: str, value: Any):
         '''Intercepta atribuições para validar EDT/Enum'''
-        if name in ('db', 'source_name', 'table_name', 'records', 'Columns', 'Indexes', 'ForeignKeys',
+        if name in ('db', 'source_name', 'source_name', 'records', 'Columns', 'Indexes', 'ForeignKeys',
                     '_where_conditions', '_columns', '_joins', '_order_by', '_limit', 
                     '_offset', '_group_by', '_having_conditions', '_distinct', '_do_update',
                     'controller', '_pending_wrapper', '__select_manager'):
@@ -147,9 +148,12 @@ class TableController():
                     attr.value = value
                 return
         
-        # Se está criando um novo EDT/Enum, armazena o nome do campo nele
+        # Se está criando um novo EDT/Enum, armazena o nome do campo e alias da tabela nele
         if isinstance(value, (EDTController, BaseEnumController)):
             value._field_name = name
+            ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 26/02/2026 '''
+            value._table_alias = self.source_name  # Injeta o alias da tabela
+            ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 26/02/2026 '''
         
         object.__setattr__(self, name, value)    
     ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''

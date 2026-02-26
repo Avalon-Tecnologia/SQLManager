@@ -4,7 +4,8 @@ from typing              import Any, List, Dict, Optional, Union
 from ..connection        import database_connection as data, Transaction
 from .EDTController      import EDTController
 from .BaseEnumController import BaseEnumController
-from .managers           import SelectManager
+
+from .managers           import *
 
 class ViewController:
     '''
@@ -31,7 +32,7 @@ class ViewController:
         
         self._pending_wrapper = None  # Rastreia wrapper pendente de execução
 
-        self.__select_manager = SelectManager(self)
+        self.__select_manager = SelectManager(self) 
 
     def __getattribute__(self, name: str):
         '''
@@ -58,9 +59,9 @@ class ViewController:
         if not name.startswith('_'):
             pending = object.__getattribute__(self, '_pending_wrapper')
             if pending is not None:
-                object.__setattr__(self, '_pending_wrapper', None) # Previne recursão infinita
                 try:
                     pending._finalize()  # Força execução
+                    object.__setattr__(self, '_pending_wrapper', None)
                 except:
                     pass
         
@@ -86,8 +87,8 @@ class ViewController:
             object.__setattr__(self, name, value)
             return
 
-        if name in self.__dict__:            
-            attr = self.__dict__[name]
+        if hasattr(self, name):            
+            attr = object.__getattribute__(self, name)
             if isinstance(attr, (EDTController, BaseEnumController)):
                 if isinstance(value, EDTController):
                     attr.value = value.value
@@ -100,15 +101,18 @@ class ViewController:
                     attr.value = value
                 return
         
-        # Se está criando um novo EDT/Enum, armazena o nome do campo nele
+        # Se está criando um novo EDT/Enum, armazena o nome do campo e alias da tabela nele
         if isinstance(value, (EDTController, BaseEnumController)):
             value._field_name = name
+            ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 26/02/2026 '''
+            value._table_alias = self.source_name  # Injeta o alias da tabela
+            ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 26/02/2026 '''
         
         object.__setattr__(self, name, value)    
 
     def select(self) -> "SelectManager":
         # Retorna o SelectManager diretamente, sem wrapper        
-        return SelectManager(self) # type: ignore
+        return SelectManager(self)
     
     def field(self, name: str):
         '''

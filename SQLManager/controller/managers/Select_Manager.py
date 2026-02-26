@@ -328,10 +328,14 @@ class SelectManager:
         
         if has_aggregates or self._group_by or self._group_by is not None:
             results = self._process_aggregate_results(rows, columns, table_columns)
+            join_records_map = None
         elif self._joins:
-            results = self._process_join_results(rows, table_columns, join_controllers)
+            ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 26/02/2026 '''
+            results, join_records_map = self._process_join_results(rows, table_columns, join_controllers)
+            ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 26/02/2026 '''
         else:
             results = self._process_simple_results(rows, table_columns)
+            join_records_map = None
         
         # SEMPRE armazena results no SelectManager para que exists() possa acessar
         self._last_results = results        
@@ -339,29 +343,38 @@ class SelectManager:
         if self._do_update:
             if results:
                 if self._joins:
-                    self._controller.records = [r[0] for r in results] if results and isinstance(results[0], list) else results
-                    if results and isinstance(results[0], list):
-                        self._controller.set_current(results[0][0])
-                    elif results:
-                        self._controller.set_current(results[0])
-                else:
-                    # Resultados simples (dicts)
+                    ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 26/02/2026 '''                    
+                    self._controller.records = [r[0] for r in results]
+                    
+                    # Popula os records de cada controller de JOIN
+                    for join_idx, join_info in enumerate(self._joins):
+                        join_ctrl         = join_info['controller']
+                        join_ctrl.records = join_records_map[join_idx]                        
+
+                        if join_ctrl.records:
+                            join_ctrl.set_current(join_ctrl.records[0])
+                                        
+                    if self._controller.records:
+                        self._controller.set_current(self._controller.records[0])
+                    ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 26/02/2026 '''
+                else:                    
                     self._controller.records = results
                     if results and isinstance(results[0], dict):
                         self._controller.set_current(results[0])
-            else:
-                # Sem resultados: limpa os campos e registros
+            else:                
                 self._controller.clear()
-                self._controller.records = []
-        else:
-            # Mesmo sem atualizar, mantém results acessíveis via _last_results
+                self._controller.records = []                
+                if self._joins:
+                    for join_info in self._joins:
+                        join_ctrl = join_info['controller']
+                        join_ctrl.clear()
+                        join_ctrl.records = []
+        else:            
             self._controller.records = results
-        
-        # Limpa o wrapper pendente após execução
+                
         if hasattr(self._controller, '_pending_wrapper'):
             self._controller._pending_wrapper = None
-
-        # Retorna o controller (instância atualizada) ao invés da lista de resultados
+        
         return self._controller
     
     def _process_aggregate_results(self, rows, columns, table_columns):
@@ -406,36 +419,39 @@ class SelectManager:
         
         return results
     
+    ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 26/02/2026 '''
     def _process_join_results(self, rows, table_columns, join_controllers):
-        """Processa resultados com JOINs"""
+        """Processa resultados com JOINs - Retorna dados separados por controller"""
         results = []
+                
+        join_records_by_controller = {i: [] for i in range(len(join_controllers))}
 
         for row in rows:
             idx = 0
+                        
             main_data = {}
             for col in table_columns:
                 main_data[col[0]] = row[idx]
                 idx += 1
+                        
+            row_data = [main_data]  
             
-            main_instance = self._controller.__class__(self._controller.db)
-            main_instance.set_current(main_data)
-            join_instances = []
-            
-            for ctrl, alias in join_controllers:
+            for join_idx, (ctrl, alias) in enumerate(join_controllers):
                 join_cols = ctrl.get_table_columns()
                 join_data = {}
 
                 for col in join_cols:
                     join_data[col[0]] = row[idx]
                     idx += 1
-
-                join_instance = ctrl.__class__(ctrl.db)
-                join_instance.set_current(join_data)
-                join_instances.append(join_instance)
+                
+                row_data.append(join_data)
+                join_records_by_controller[join_idx].append(join_data)
             
-            results.append([main_instance] + join_instances)
+            results.append(row_data)
         
-        return results
+        # Retorna tanto os resultados quanto os registros separados
+        return results, join_records_by_controller
+    ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 26/02/2026 '''
     
     def _process_simple_results(self, rows, table_columns):
         """Processa resultados simples sem JOINs"""
@@ -461,7 +477,10 @@ class JoinBuilder:
         Define a condição ON do JOIN
         Ex: .on(tabela.c.id == outra.c.id)
         """
-        other_alias = alias or self.other_table.table_name
+
+        ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 26/02/2026 '''
+        other_alias = alias or self.other_table.source_name
+        ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 26/02/2026 '''
         
         on_sql, _ = condition.to_sql()
         
