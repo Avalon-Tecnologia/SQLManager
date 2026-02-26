@@ -2,15 +2,30 @@
 
 Sistema reutilizável para gerenciamento de conexões de banco de dados, validações de dados (EDTs e BaseEnums) e controle de tabelas.
 
+## Sumário
+- [Características](#características)
+- [Instalação](#instalação)
+- [Geração de Modelos](#passo-obrigatório-gerar-os-modelos)
+- [Configuração (CoreConfig)](#coreconfig---central-de-configuração)
+  - [AutoRouter](#3-configuração-do-autorouter)
+- [Uso Básico](#uso-básico)
+  - [API Fluente (JOINs, CRUD)](#nova-api-fluente-v20)
+  - [Transações](#transações-isoladas)
+- [Padrões Avançados](#padrões-de-uso-avançados)
+- [Estrutura do Projeto](#estrutura-do-projeto-host)
+- [Boas Práticas](#boas-práticas)
+- [Troubleshooting](#troubleshooting)
+
 ## Características
 
-- Pool de Conexões: Gerenciamento eficiente de conexões com banco de dados
-- Transações Isoladas: Sistema de transações similar ao KNEX.js
-- Validações Extensíveis: Sistema de EDTs (Extended Data Types) com regex customizáveis
-- BaseEnums: Sistema de enumerações com validação integrada
-- Configuração Flexível: Suporte a múltiplos projetos sem modificar o Core
-- Type Safety: Validações de tipo e formato em runtime
-- Model Generator: Sistema automático de geração de modelos baseado no banco de dados
+- **Pool de Conexões:** Gerenciamento eficiente de conexões com banco de dados
+- **Transações Isoladas:** Sistema de transações similar ao KNEX.js
+- **Validações Extensíveis:** Sistema de EDTs (Extended Data Types) com regex customizáveis
+- **BaseEnums:** Sistema de enumerações com validação integrada
+- **Configuração Flexível:** Suporte a múltiplos projetos sem modificar o Core
+- **Type Safety:** Validações de tipo e formato em runtime
+- **Model Generator:** Sistema automático de geração de modelos baseado no banco de dados
+- **AutoRouter:** Geração automática de endpoints RESTful para CRUD
 
 ---
 
@@ -134,21 +149,163 @@ nome = products.NAME  # Acesso direto
 
 Para detalhes completos: [PatchNote_2.0.md](SQLManager/documents/PatchNote_2.0.md)
 
----
-
-## Controllers - Controladoras
-
-Para documentação detalhada das controllers, métodos e exemplos, consulte:
-
-- [SQLManager/controller/Instructions.md](SQLManager/controller/Instructions.md)
+## Uso e Configuração
 
 ---
 
-## Connection - Conexões
+## CoreConfig - Central de Configuração
 
-Para documentação detalhada da classe connection, métodos e exemplos, consulte:
+O `CoreConfig` é a classe estática responsável por centralizar toda a configuração do SQLManager. Ele atua como uma ponte entre o seu projeto e o núcleo da biblioteca, permitindo definir conexões de banco de dados, regras de validação customizadas e comportamento de rotas sem modificar o código fonte do pacote.
 
-- [SQLManager/controller/Instructions.md](SQLManager/connection/Instructions.md)
+### 🎯 Funcionalidades Principais
+
+1.  **Configuração de Banco de Dados:** Define credenciais e driver de conexão.
+2.  **Registro de Regex (EDTs):** Adiciona padrões de validação customizados para seus tipos de dados.
+3.  **Configuração do AutoRouter:** Controla a geração automática de APIs REST.
+4.  **Carregamento Flexível:** Suporta dicionários, variáveis de ambiente ou chamadas diretas.
+
+---
+
+### 1. Configuração do Banco de Dados
+
+O SQLManager precisa saber como conectar ao seu banco. O `CoreConfig` gerencia essas credenciais globalmente.
+
+#### Opção A: Via Variáveis de Ambiente (Recomendado)
+O método `configure` busca automaticamente por variáveis de ambiente se `load_from_env=True` (padrão).
+
+**No seu arquivo `.env`:**
+```env
+DB_SERVER=localhost
+DB_DATABASE=MeuBanco
+DB_USER=sa
+DB_PASSWORD=senha_segura
+```
+
+**No seu código (ex: `app.py`):**
+```python
+from SQLManager import CoreConfig
+
+# Carrega automaticamente do .env
+CoreConfig.configure()
+```
+
+#### Opção B: Configuração Explícita
+Útil se você gerencia configurações de outra forma (ex: AWS Secrets Manager).
+
+```python
+CoreConfig.configure(
+    db_server='192.168.1.10',
+    db_database='ProductionDB',
+    db_user='admin',
+    db_password='secure_password',
+    db_driver='ODBC Driver 17 for SQL Server', # Opcional (Padrão: ODBC Driver 18)
+    load_from_env=False
+)
+```
+
+---
+
+### 2. Registro de Regex Customizados (EDTs)
+
+O sistema de EDTs (Extended Data Types) usa Regex para validar dados. O `CoreConfig` permite que você registre seus próprios padrões (ex: formato de SKU, Email Corporativo) para usar em suas tabelas.
+
+#### Registrando um único padrão
+```python
+# Registra um padrão para código de produto (ex: PRD-1234)
+CoreConfig.register_regex('ProductCode', r'^PRD-\d{4}$')
+```
+
+#### Registrando múltiplos padrões
+```python
+CoreConfig.register_multiple_regex({
+    'CompanyEmail': r'^[\w\.-]+@minhaempresa\.com$',
+    'LicensePlate': r'^[A-Z]{3}-\d{4}$',
+    'ZipCode': r'^\d{5}-\d{3}$'
+})
+```
+
+#### Como usar na Tabela
+```python
+class Products(TableController):
+    def __init__(self, db):
+        super().__init__(db)
+        # Usa o ID 'ProductCode' registrado no CoreConfig
+        self.SKU = EDTController('ProductCode', str)
+```
+
+---
+
+### 3. Configuração do AutoRouter
+
+O `AutoRouter` cria endpoints de API automaticamente. O `CoreConfig` define as regras de exposição.
+
+```python
+router_config = {
+    # Ativa/Desativa o sistema de rotas
+    "enable_dynamic_routes": True,
+    
+    # Prefixo para as URLs (ex: http://localhost/api/v1/Products)
+    "url_suffix": "api/v1",
+
+    # Tabelas que NÃO devem ter rotas
+    "exclude_tables": ["SysLog", "UserPasswords"],
+
+    # Configurações por tabela
+    "tables": {
+        "Products": {
+            "allowed_methods": ["GET", "POST"], # Apenas leitura e escrita (sem update/delete)
+            
+            # Configuração de Deleção Lógica (Soft Delete)
+            "delete_behavior": {
+                "mode": "logical",
+                "field": "IS_DELETED",
+                "value": 1
+            }
+        }
+    }
+}
+
+CoreConfig.configure_router(router_config)
+```
+
+---
+
+### 4. Métodos Utilitários
+
+#### `configure_from_dict`
+Configura banco, regex e router de uma vez só. Ideal para carregar de arquivos JSON ou YAML.
+
+```python
+config_data = {
+    "db_server": "localhost",
+    "db_database": "TestDB",
+    "custom_regex": {
+        "OnlyUpper": r"^[A-Z]+$"
+    },
+    "router_config": {
+        "enable_dynamic_routes": True
+    }
+}
+
+CoreConfig.configure_from_dict(config_data)
+```
+
+#### `reset`
+Limpa todas as configurações. Use no `setUp` de testes unitários para garantir um estado limpo.
+
+```python
+def setUp(self):
+    CoreConfig.reset()
+    CoreConfig.configure(...)
+```
+
+#### `is_configured`
+Verifica se o Core já foi inicializado.
+
+```python
+if not CoreConfig.is_configured():
+    raise Exception("SQLManager não foi configurado!")
+```
 
 ---
 

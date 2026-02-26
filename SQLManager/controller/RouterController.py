@@ -351,4 +351,120 @@ class AutoRouter:
             except:
                 pass
         return data
+
+    def _discover_tables(self) -> List[str]:
+        """
+        Descobre todas as tabelas disponíveis no TablePack para geração de documentação.
+        """
+        tables = []
+        possible_modules = ["model.TablePack", "src.model.TablePack"]
+        module = None
+        
+        for mod_name in possible_modules:
+            try:
+                module = importlib.import_module(mod_name)
+                break
+            except ImportError:
+                continue
+        
+        if not module:
+            return []
+            
+        for name in dir(module):
+            if name.startswith('_'): continue
+            # Ignora imports que não são classes ou que estão na lista de exclusão
+            if name.upper() in self._exclude_tables:
+                continue
+                
+            attr = getattr(module, name)
+            if isinstance(attr, type):
+                tables.append(name)
+        
+        return sorted(tables)
+
+    def generate_postman_collection(self, base_url: str = "http://localhost:5000", collection_name: str = "SQLManager API") -> Dict[str, Any]:
+        """
+        Gera uma coleção do Postman (v2.1) com todas as rotas disponíveis.
+        
+        Args:
+            base_url: URL base da API (ex: http://localhost:5000)
+            collection_name: Nome da coleção
+            
+        Returns:
+            Dict: JSON da coleção Postman
+        """
+        # Define o sufixo (padrão 'manager' se não configurado)
+        suffix = self.config.get('url_suffix', 'manager')
+        suffix = suffix.strip('/')
+        
+        # Prepara partes da URL
+        host_parts = base_url.replace("http://", "").replace("https://", "").split(":")
+        host = host_parts[0]
+        port = host_parts[1] if len(host_parts) > 1 else ""
+        
+        path_prefix = suffix.split('/') if suffix else []
+        full_base = f"{base_url}/{suffix}" if suffix else base_url
+
+        item_list = []
+        tables = self._discover_tables()
+        
+        for table_name in tables:
+            table_upper = table_name.upper()
+            table_config = self._tables_config.get(table_upper, {})
+            allowed = table_config.get('allowed_methods', ["GET", "POST", "PATCH", "DELETE"])
+            
+            table_items = []
+            
+            # Helper para criar objeto URL do Postman
+            def make_url(path_segments, query=None):
+                u = {
+                    "raw": f"{full_base}/{'/'.join(path_segments)}" + (f"?{query}" if query else ""),
+                    "protocol": "http",
+                    "host": host.split('.'),
+                    "path": path_prefix + path_segments
+                }
+                if port: u["port"] = port
+                if query:
+                    q_list = []
+                    for pair in query.split('&'):
+                        k, v = pair.split('=')
+                        q_list.append({"key": k, "value": v})
+                    u["query"] = q_list
+                return u
+
+            if "GET" in allowed:
+                table_items.append({
+                    "name": f"List {table_name}",
+                    "request": {"method": "GET", "header": [], "url": make_url([table_name], "page=1&limit=10")}
+                })
+                table_items.append({
+                    "name": f"Get {table_name} by ID",
+                    "request": {"method": "GET", "header": [], "url": make_url([table_name, "1"])}
+                })
+
+            if "POST" in allowed:
+                table_items.append({
+                    "name": f"Create {table_name}",
+                    "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": json.dumps({"FIELD": "VALUE"}, indent=4)}, "url": make_url([table_name])}
+                })
+
+            if "PATCH" in allowed:
+                table_items.append({
+                    "name": f"Update {table_name}",
+                    "request": {"method": "PATCH", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": json.dumps({"FIELD": "NEW_VALUE"}, indent=4)}, "url": make_url([table_name, "1"])}
+                })
+
+            if "DELETE" in allowed:
+                table_items.append({
+                    "name": f"Delete {table_name}",
+                    "request": {"method": "DELETE", "header": [], "url": make_url([table_name, "1"])}
+                })
+            
+            if table_items:
+                item_list.append({"name": table_name, "item": table_items})
+
+        return {
+            "info": {"name": collection_name, "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+            "item": item_list
+        }
 ''' [END CODE] Project: SQLManager Version 4.0 / issue: #3 / made by: Matheus / created: 25/02/2026 '''

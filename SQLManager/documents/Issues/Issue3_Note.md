@@ -277,3 +277,174 @@ class TestAutoRouter(unittest.TestCase):
         print(f"Resultado: {response}")
         self.assertEqual(response["status"], 404)
         self.assertIn("not found", response["error"])
+```
+
+---
+
+## 🌐 Estrutura de URLs e Exemplos Práticos
+
+Com base na estrutura do AutoRouter definida no seu código (`RouterController.py`) e na documentação, aqui estão exemplos práticos de como as URLs são formadas.
+
+O padrão geral é: `{Protocolo}://{Dominio}:{Porta}/{Sufixo}/{Tabela}/{ID_ou_Rota}?{Filtros}`
+
+### Cenário de Exemplo
+*   **Servidor:** `http://localhost:5000`
+*   **Tabela:** `Products`
+*   **Sufixo Padrão:** `manager` (definido no código se não houver config)
+
+### 1. Operações Básicas (CRUD)
+
+| Ação | Método HTTP | URL Exemplo | Descrição |
+| :--- | :--- | :--- | :--- |
+| **Listar Tudo** | `GET` | `http://localhost:5000/manager/Products` | Retorna lista de produtos (padrão 20 itens). |
+| **Buscar por ID** | `GET` | `http://localhost:5000/manager/Products/10` | Retorna apenas o produto com `RECID = 10`. |
+| **Criar Novo** | `POST` | `http://localhost:5000/manager/Products` | Cria um produto (dados vão no corpo JSON). |
+| **Atualizar** | `PATCH` | `http://localhost:5000/manager/Products/10` | Atualiza o produto 10 (dados parciais no corpo). |
+| **Deletar** | `DELETE` | `http://localhost:5000/manager/Products/10` | Remove o produto 10. |
+
+### 2. Filtros e Paginação (Query String)
+
+Os filtros são adicionados após o `?` na URL. O `RouterController` interpreta sufixos como `_gt` (maior que), `_like` (contém), etc.
+
+*   **Paginação:** `http://localhost:5000/manager/Products?page=2&limit=50` (Página 2, 50 itens por página)
+*   **Preço maior que 100:** `http://localhost:5000/manager/Products?PRICE_gt=100`
+*   **Nome contém "Gamer":** `http://localhost:5000/manager/Products?NAME_like=%Gamer%`
+*   **Combinação (Preço < 50 E Ativo):** `http://localhost:5000/manager/Products?PRICE_lt=50&ACTIVE=1`
+
+### 3. Rotas Customizadas
+Se você definiu uma rota customizada no `CoreConfig` (ex: para limpar logs antigos), ela aparece como um "caminho" extra após a tabela.
+
+*   **Configuração:** `{"route": "clear_old", ...}`
+*   **URL:** `DELETE http://localhost:5000/manager/Logs/clear_old`
+```
+
+---
+
+## 📝 Geração de Coleção Postman
+
+O AutoRouter pode gerar automaticamente uma coleção Postman (v2.1) para todos os endpoints CRUD dinâmicos, facilitando a documentação e o teste da sua API.
+
+### Como Gerar a Coleção
+
+Você pode expor um endpoint na sua aplicação (ex: Flask, FastAPI) que chama o método `generate_postman_collection` do `AutoRouter`.
+
+```python
+# Exemplo em uma aplicação Flask
+from flask import Flask, jsonify, request
+from SQLManager.controller.RouterController import AutoRouter
+from SQLManager.connection import database_connection
+from SQLManager.CoreConfig import CoreConfig
+import os
+
+app = Flask(__name__)
+
+# Configuração do CoreConfig e AutoRouter (assumindo que já foi feita na inicialização da app)
+# Exemplo:
+# CoreConfig.configure(db_server=os.getenv('DB_SERVER'), ...)
+# CoreConfig.configure_router({"enable_dynamic_routes": True, "url_suffix": "api", ...})
+
+# Inicialize a conexão com o banco de dados e o AutoRouter
+# Em um ambiente de produção, a gestão de conexões e a inicialização
+# do router seriam feitas de forma mais robusta (ex: com app context ou injeção de dependência).
+db = database_connection() 
+try:
+    db.connect() # Tenta conectar, pode falhar se o DB não estiver disponível
+except Exception as e:
+    print(f"Aviso: Não foi possível conectar ao banco de dados para o exemplo: {e}")
+    # Em um cenário real, você trataria isso de forma mais robusta.
+
+router = AutoRouter(db)
+
+@app.route('/generate-postman-collection', methods=['GET'])
+def get_postman_collection():
+    # A URL base será a da sua aplicação. O método generate_postman_collection
+    # adicionará o sufixo configurado (ex: /api) automaticamente.
+    # Ex: se a app roda em http://localhost:5000, a base_url será http://localhost:5000
+    collection = router.generate_postman_collection(base_url=request.host_url.rstrip('/'))
+    return jsonify(collection)
+
+if __name__ == '__main__':
+    # Exemplo de configuração mínima para rodar este snippet
+    CoreConfig.configure(
+        db_server=os.getenv('DB_SERVER', 'localhost'),
+        db_database=os.getenv('DB_DATABASE', 'TestDB'),
+        db_user=os.getenv('DB_USER', 'sa'),
+        db_password=os.getenv('DB_PASSWORD', 'your_password')
+    )
+    CoreConfig.configure_router({
+        "enable_dynamic_routes": True,
+        "url_suffix": "api", # Define o sufixo para as URLs geradas no Postman
+        "exclude_tables": ["SysLog"],
+        "tables": {
+            "Products": {"allowed_methods": ["GET", "POST", "PATCH", "DELETE"]}
+        }
+    })
+    app.run(debug=True, port=5000)
+```
+
+### Configuração do Sufixo da URL
+
+O sufixo para as URLs geradas na coleção Postman é definido na configuração do `CoreConfig` através da chave `url_suffix`.
+
+-   **Padrão:** Se `url_suffix` não for especificado, o valor padrão será `'manager'`.
+-   **Customizado:** Se você configurar `url_suffix: 'api/v1'`, as URLs na coleção serão `http://localhost:5000/api/v1/{Tabela}`.
+
+**Exemplo de Configuração:**
+```python
+from SQLManager import CoreConfig
+
+CoreConfig.configure_router({
+    "enable_dynamic_routes": True,
+    "url_suffix": "api", # As URLs no Postman serão /api/{Tabela}
+    # ... outras configurações
+})
+```
+
+---
+
+## 🔍 Exemplo de Verificação de URL (Debug)
+
+Para verificar como o `AutoRouter` processa uma URL sem precisar subir um servidor web, você pode chamar diretamente o método `handle_request`.
+
+```python
+from SQLManager.controller.RouterController import AutoRouter
+from SQLManager.CoreConfig import CoreConfig
+from unittest.mock import MagicMock
+
+# 1. Configuração (Simulada)
+CoreConfig.reset()
+CoreConfig.configure_router({
+    "enable_dynamic_routes": True,
+    "url_suffix": "api",
+    "tables": {
+        "Products": {
+            "allowed_methods": ["GET", "POST", "DELETE"]
+        }
+    }
+})
+
+# 2. Inicialização (Mockando o banco para não precisar de conexão real neste teste)
+mock_db = MagicMock()
+router = AutoRouter(mock_db)
+
+# --- TESTES DE VERIFICAÇÃO ---
+
+print("=== Teste 1: Listar Produtos (GET /Products?page=1&limit=5) ===")
+# Simula: GET http://localhost/api/Products?page=1&limit=5
+response = router.handle_request(
+    method="GET",
+    table_name="Products",
+    path_parts=[], 
+    query_params={"page": "1", "limit": "5"}
+)
+print(f"Status: {response.get('status')}")
+
+print("\n=== Teste 2: Buscar por ID (GET /Products/123) ===")
+# Simula: GET http://localhost/api/Products/123
+response = router.handle_request(
+    method="GET",
+    table_name="Products",
+    path_parts=["123"]
+)
+print(f"Status: {response.get('status')}")
+``` 
