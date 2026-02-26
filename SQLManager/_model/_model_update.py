@@ -708,7 +708,7 @@ class View_Manager:
         
         skipped_views = []
         for view_name in db_views:
-            error_info = Table_Manager._update_single_table(_model, view_name)
+            error_info = View_Manager._update_single_view(_model, view_name)
             if error_info:
                 skipped_views.append(error_info)
                 
@@ -737,7 +737,7 @@ class View_Manager:
                 print(f"{SystemController().custom_text('Motivo:', 'red')} {error_info['reason']}")
                 print("-"*60)
         
-        Table_Manager._scan_existing_tables(_model, _ShowTables=True)
+        View_Manager._scan_existing_views(_model, _ShowViews=True)
 
     def _update_views_init(_model: ModelUpdater):
         '''Atualiza __init__.py de views'''
@@ -776,7 +776,7 @@ class View_Manager:
         columns = _model.db.doQuery(query, (view_name,))
         
         if not columns:
-            return {'View': view_name, 'reason': 'View sem colunas'}
+            return {'view': view_name, 'reason': 'View sem colunas'}
         
         ''' View não tem RECID Obrigatorio
         recid_column = None
@@ -798,9 +798,9 @@ class View_Manager:
         
         try:
             if view_file.exists():
-                view_code = Table_Manager._update_existing_table(_model, view_name, columns, view_file)
+                view_code = View_Manager._update_existing_view(_model, view_name, columns, view_file)
             else:
-                view_code = Table_Manager._generate_table_class(_model, view_name, columns)
+                view_code = View_Manager._generate_View_class(_model, view_name, columns)
                     
             with open(view_file, 'w', encoding='utf-8') as f:
                 f.write(view_code)
@@ -808,7 +808,7 @@ class View_Manager:
             print(f"Atualizada: {SystemController().custom_text(view_name, 'green', is_bold=True)}")
             return None
         except Exception as e:
-            return {'View': view_name, 'reason': f'Erro ao gerar código: {str(e)}'}
+            return {'view': view_name, 'reason': f'Erro ao gerar código: {str(e)}'}
     
     def _update_existing_view(_model: ModelUpdater, view_name: str, columns, view_file: Path) -> str:
         '''Atualiza view existente preservando métodos customizados'''
@@ -932,7 +932,7 @@ class View_Manager:
             sql_type   = col[1].lower()
             max_length = col[3]
                         
-            field_def = Table_Manager._detect_field_type(_model, col_name, sql_type, max_length)
+            field_def = View_Manager._detect_field_type(_model, col_name, sql_type, max_length)
             lines.append(f"        self.{col_name} = {field_def}")
         
         lines.append("")
