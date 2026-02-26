@@ -1,4 +1,4 @@
-''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #1 / made by: Nicolas Santos / created: 23/02/2026 '''
+''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 23/02/2026 '''
 from typing              import Any, List, Dict, Optional, Union
 
 from ..connection        import database_connection as data, Transaction
@@ -7,65 +7,32 @@ from .BaseEnumController import BaseEnumController
 
 from .managers           import *
 
-class TableController():
-    """
-    Classe de controle de tabelas do banco de dados (SQL Server) - REFATORADA
-    
-    SELECT:
-    - tabela.select().where(tabela.CAMPO == 5)  # Auto-executa!
-    - tabela.select().where((tabela.CAMPO == 5) & (tabela.OUTRO > 10))
-    - tabela.select().where(tabela.CAMPO == 5).order_by(tabela.NOME)
-    - tabela.select().columns(tabela.ID, tabela.NOME).where(tabela.ATIVO == True)
-    - tabela.select().where(tabela.ID > 100).limit(10)
-    
-    INSERT/UPDATE/DELETE em massa:
-    - tabela.insert_recordset(['CAMPO1', 'CAMPO2'], [(val1, val2), (val3, val4)]).where('CAMPO1').execute()
-    - tabela.update_recordset(where=tabela.CAMPO == 5, NOME='Novo', ATIVO=True)
-    - tabela.delete_from().where(tabela.CAMPO < 10)  # Auto-executa!
-    
-    Operadores suportados: ==, !=, <, <=, >, >=, in_(), like()
-    Operadores lógicos: & (AND), | (OR)
-    
-    IMPORTANTES:
-    - USE CAMPOS (tabela.CAMPO) em vez de strings ("CAMPO") nos métodos
-    - Sem .execute(): auto-executa quando a linha termina
-    - Sem result =: instância é atualizada automaticamente
-    - Sem .value: use tabela.CAMPO = valor (setter automático)
-    
-    Herda de 4 managers:
-    - SelectManager: operações SELECT (auto-executa)
-    - InsertManager: operações INSERT (com decorator @validate_insert)
-    - UpdateManager: operações UPDATE (com decorator @validate_update)
-    - DeleteManager: operações DELETE (com decorator @validate_delete)
-    """
-    
-    # Cache estático de colunas com DEFAULT por tabela
-    _defaults_cache: Dict[str, set] = {}
-    
-    ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
+class ViewController:
+    '''
+    Classe de Controle de Views do banco de dados (SQL Server).
+
+    assim como a classe TableController, esta classe é responsável por gerenciar as operações relacionadas às views do banco de dados a consulta de views.
+    '''
+    _default_cache: Dict[str, set] = {}
+
     def __init__(self, db: Union[data, Transaction], source_name: Optional[str] = None):
         '''
-        Inicializa o controlador de tabela.
+        Inicializa uma instância do ViewController.
         Args:
-            db (Union[data, Transaction]): Instância de conexão ou transação.
-            source_name (str): Nome da tabela ou view no banco de dados.
+            db: Conexão com o banco de dados ou transação.
+            source_name: Nome da view a ser gerenciada (opcional).
         '''
-        #SelectManager.__init__(self, self)
-        
-        self.db         = db
+        self.db        = db
         self.source_name = (source_name or self.__class__.__name__).upper()
 
         self.records:     List[Dict[str, Any]]           = []
         self.Columns:     Optional[List[List[Any]]]      = None
         self.Indexes:     Optional[List[str]]            = None
         self.ForeignKeys: Optional[List[Dict[str, Any]]] = None
-
-        self.isUpdate = False
+        
         self._pending_wrapper = None  # Rastreia wrapper pendente de execução
 
         self.__select_manager = SelectManager(self) 
-
-    ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
 
     def __getattribute__(self, name: str):
         '''
@@ -77,14 +44,12 @@ class TableController():
         protected_attrs = {
             'db', 'source_name', 'records', 'Columns', 'Indexes', 'ForeignKeys',
             '_where_conditions', '_columns', '_joins', '_order_by', '_limit',
-            '_offset', '_group_by', '_having_conditions', '_distinct', '_do_update',
-            'controller', '__class__', '__dict__', 'isUpdate', '_pending_wrapper',
-            '__select_manager', 'field', 'select', 'insert', 'update', 'delete',
-            'insert_recordset', 'update_recordset', 'delete_from', 'set_current',
-            'clear', 'validate_fields', 'validate_write', 'get_table_columns',
-            'get_columns_with_defaults', 'get_table_index', 'get_table_foreign_keys',
-            'get_table_total', 'exists', '_get_field_instance', '_is_aggregate_function',
-            '_extract_field_from_aggregate', 'SelectForUpdate'
+            '_offset', '_group_by', '_having_conditions', '_distinct',
+            'controller', '__class__', '__dict__', '_pending_wrapper',
+            '__select_manager', 'field', 'select','set_current',
+            'clear', 'validate_fields', 'get_table_columns', 'get_columns_with_defaults', 
+            'get_table_index', 'get_table_foreign_keys', 'get_table_total', 
+            'exists', '_get_field_instance', '_is_aggregate_function', '_extract_field_from_aggregate'
         }
         
         if name in protected_attrs or name.startswith('_'):
@@ -113,7 +78,6 @@ class TableController():
         
         return attr
   
-    ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
     def __setattr__(self, name: str, value: Any):
         '''Intercepta atribuições para validar EDT/Enum'''
         if name in ('db', 'source_name', 'records', 'Columns', 'Indexes', 'ForeignKeys',
@@ -142,67 +106,11 @@ class TableController():
             value._field_name = name
         
         object.__setattr__(self, name, value)    
-    ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
 
-    def insert(self) -> bool:
-        """Insere um novo registro na tabela"""
-        return InsertManager.insert(self)
-    
-    def insert_recordset(self, source_data: Union[List[tuple], List[Dict], List[Any]], columns: Optional[List[str]] = None) -> InsertRecordsetWrapper:
-        """Insere múltiplos registros em massa (auto-executa ou use .where())"""
-        return InsertManager.insert_recordset(self, source_data, columns)
-
-    def update(self) -> bool:
-        """Atualiza um registro existente na tabela"""
-        if(not self.isUpdate):
-            raise Exception("Registro não definido para atualização.")
-        
-        values = [{}]
-        for key in self.__dict__:
-            attr = self._get_field_instance(key)
-            if not (isinstance(attr, (EDTController, BaseEnumController, BaseEnumController.Enum))) or key == 'RECID':
-                continue
-            values[0][key] = attr.value
-
-        ret = UpdateManager.update(self, values)
-
-        self.isUpdate = False
-
-        return ret  
-    
-    def SelectForUpdate(self, _update: bool):
-        '''Marca o Registro para ser atualizado após um select()
-        Uso: table.SelectForUpdate(True) antes de fazer modificações
-        '''
-        self.isUpdate = _update        
-
-    def update_recordset(self, where: Optional[Union[FieldCondition, BinaryExpression]] = None, **fields) -> int:
-        """Atualiza múltiplos registros em massa"""
-        return UpdateManager.update_recordset(self, where, **fields)
-
-    def delete(self) -> bool:
-        """Exclui um registro da tabela"""
-        return DeleteManager.delete(self)
-    
-    def delete_from(self) -> 'DeleteRecordsetManager':
-        """Deleta múltiplos registros em massa com API fluente (auto-executa ou use .where())
-        
-        Uso:
-            # Auto-executa quando termina a linha
-            table.delete_from().where(table.CAMPO == valor)
-            
-            # Ou armazene e execute explicitamente
-            result = table.delete_from().where(table.CAMPO == valor).execute()
-        
-        Returns:
-            DeleteRecordsetManager: Manager para construir a query de deleção
-        """
-        return DeleteManager.delete_from(self)
-    
     def select(self) -> "SelectManager":
-        # Retorna o SelectManager diretamente, sem wrapper
+        # Retorna o SelectManager diretamente, sem wrapper        
         return SelectManager(self)
-
+    
     def field(self, name: str):
         '''
         Retorna a instância EDT/Enum real de um campo (para construir queries).
@@ -219,8 +127,8 @@ class TableController():
         Retorna a instância EDT/Enum real de um campo (não o valor).
         Use quando precisar acessar métodos do EDT/Enum ou criar queries.
         '''
-        return object.__getattribute__(self, name)         
-
+        return object.__getattribute__(self, name)
+    
     def _is_aggregate_function(self, column: str) -> bool:
         '''
         Verifica se a coluna contém uma função de agregação SQL.
@@ -232,7 +140,7 @@ class TableController():
         aggregate_functions = ['COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'GROUP_CONCAT', 'STRING_AGG']
         column_upper = column.upper().strip()
         return any(func in column_upper for func in aggregate_functions)
-
+    
     def _extract_field_from_aggregate(self, column: str) -> Optional[str]:
         '''
         Extrai o nome do campo de dentro de uma função de agregação.
@@ -250,8 +158,7 @@ class TableController():
                 return 'RECID'
             return field
         return None
-
-    ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
+    
     def get_table_columns(self) -> List[List[Any]]:
         '''
         Retorna as colunas da tabela (nome, tipo, se aceita nulo).
@@ -277,8 +184,7 @@ class TableController():
             self.Columns = columns
         
         return self.Columns
-    ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
-
+    
     def get_columns_with_defaults(self) -> set:
         '''
         Retorna conjunto de colunas que possuem DEFAULT definido no banco.
@@ -286,10 +192,8 @@ class TableController():
         Returns:
             set: Conjunto com nomes das colunas que têm DEFAULT
         '''
-        if self.source_name in TableController._defaults_cache:
-            ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
-            return TableController._defaults_cache[self.source_name]
-            ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
+        if self.source_name in ViewController._defaults_cache:
+            return ViewController._defaults_cache[self.source_name]
         
         query = f"""
         SELECT c.name
@@ -297,17 +201,11 @@ class TableController():
         INNER JOIN sys.tables t ON c.object_id = t.object_id
         WHERE t.name = ? AND c.default_object_id > 0
         """
-        ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
-        defaults_result = self.db.doQuery(query, (self.source_name,))
-        ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
-
+        defaults_result      = self.db.doQuery(query, (self.source_name,))
         columns_with_default = set(row[0] for row in defaults_result) if defaults_result else set()
         
         # Cachear resultado
-        ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
-        TableController._defaults_cache[self.source_name] = columns_with_default
-        ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
-
+        ViewController._defaults_cache[self.source_name] = columns_with_default
         return columns_with_default
 
     def get_table_index(self) -> List[str]:
@@ -319,11 +217,8 @@ class TableController():
         if self.Indexes:
             return self.Indexes
         
-        query = f"SELECT name FROM sys.indexes WHERE object_id = OBJECT_ID(?)"   
-
-        ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''     
+        query = f"SELECT name FROM sys.indexes WHERE object_id = OBJECT_ID(?)"        
         rows  = self.db.doQuery(query, (self.source_name,))
-        ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
 
         self.Indexes = [row[0] for row in rows]
 
@@ -353,10 +248,7 @@ class TableController():
             INNER JOIN sys.columns cr ON fkc.referenced_object_id = cr.object_id AND fkc.referenced_column_id = cr.column_id
             WHERE tp.name = ? OR tr.name = ?
         '''
-
-        ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
         rows = self.db.doQuery(query, (self.source_name, self.source_name))
-        ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
 
         self.ForeignKeys = [
             {
@@ -377,32 +269,7 @@ class TableController():
             int: Total de registros.
         '''        
         return len(self.records)
-
-    def _check_exists(self, where: Union[FieldCondition, BinaryExpression]) -> bool:
-        '''
-        MÉTODO INTERNO: Verifica se existem registros (usado por decorators).
-        Args:
-            where: Condição WHERE usando operadores sobrecarregados
-        Returns:
-            bool: True se existir pelo menos um registro, False caso contrário.
-        '''
-        select_mgr = self.select().where(where).limit(1).do_update(False)
-        select_mgr.execute()
-
-        return len(select_mgr._last_results) > 0
     
-    def exists(self, where: Union[FieldCondition, BinaryExpression]) -> bool:
-        '''
-        Verifica se existem registros que atendem aos critérios especificados.
-        Args:
-            where: Condição WHERE usando operadores sobrecarregados
-                   Ex: tabela.RECID == 5
-                   Ex: (tabela.CAMPO == 5) & (tabela.OUTRO > 10)
-        Returns:
-            bool: True se existir pelo menos um registro, False caso contrário.
-        '''
-        return self._check_exists(where)
-
     def validate_fields(self) -> Dict[str, Any]:
         '''
         Valida se os campos da instância existem na tabela.
@@ -410,7 +277,7 @@ class TableController():
             Dict[str, Any]: {'valid': True/False, 'error': mensagem}
         '''
         return self.__validate_fields()
-
+    
     def __validate_fields(self) -> Dict[str, Any]:
         '''
         Valida se os campos da instância existem na tabela.
@@ -423,45 +290,12 @@ class TableController():
         field_names     = [col[0].upper() for col in table_columns]
         invalid_fields  = [f for f in instance_fields if f.upper() not in field_names]
 
-        ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
         if invalid_fields:
             ret = {
                 'valid': False,
                 'error': f"Campo(s) inválido(s) na instância: [{', '.join(invalid_fields)}] não existem na tabela [{self.source_name}]"
             }
-        ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
-
-        return ret
-
-    def validate_write(self) -> Dict[str, Any]:
-        '''
-        Validação antes do insert ou update.
-        Verifica se campos obrigatórios estão preenchidos (exceto os que têm DEFAULT no banco).
-        Returns:
-            Dict[str, Any]: {'valid': True/False, 'error': mensagem}
-        '''
-        ret = {'valid': True, 'error': ''}
-
-        columns              = self.get_table_columns()
-        columns_with_default = self.get_columns_with_defaults()
-        
-        # Filtrar campos NOT NULL que NÃO têm DEFAULT (esses são realmente obrigatórios)
-        required_fields = [
-            col[0] for col in columns 
-            if col[2] == 'NO' and col[0] != 'RECID' and col[0] not in columns_with_default
-        ]
-        
-        instance_fields = {k: self._get_field_instance(k) for k in self.__dict__ if isinstance(self._get_field_instance(k), (EDTController, BaseEnumController, BaseEnumController.Enum))}
-        
-        # Validar apenas campos obrigatórios que NÃO têm DEFAULT
-        for field in required_fields:
-            if field not in instance_fields:
-                ret = {'valid': False, 'error': f"Campo obrigatório '{field}' não existe na instância"}
-                return ret
-            attr = instance_fields[field]
-            if attr.value is None or attr.value == '':
-                ret = {'valid': False, 'error': f"Campo obrigatório '{field}' não pode ser vazio (campo sem DEFAULT no banco)"}
-                return ret
+            
         return ret
 
     def clear(self):
@@ -477,16 +311,16 @@ class TableController():
 
     def set_current(self, record):
         '''
-        Preenche os campos da tabela com os valores do banco.
+        Preenche os campos da view com os valores do banco.
         Args:
-            record (Dict[str, Any] | TableController): Linha vinda do banco (SELECT) ou outra instância
+            record (Dict[str, Any] | ViewController): Linha vinda do banco (SELECT) ou outra instância
         Returns:
             self: Instância preenchida ou None se record for None
         '''
         if record is None:
             return self
         
-        if isinstance(record, TableController):
+        if isinstance(record, ViewController):
             for key in self.__dict__:
                 self_attr = self._get_field_instance(key)
                 if isinstance(self_attr, (EDTController, BaseEnumController, BaseEnumController.Enum)):
@@ -497,28 +331,24 @@ class TableController():
             return self
         
         # Criar mapeamento case-insensitive
-        record_upper = {k.upper(): v for k, v in record.items()}
-
-        #limpar tipos para evitar erros comuns (datetime, decimal)          
-        
+        record_upper = {k.upper(): v for k, v in record.items()}    
+                    
         for key in self.__dict__:
             # Pular atributos especiais
-            ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
             if key.startswith('_') or key in ('db', 'source_name', 'records', 'Columns', 'Indexes', 'ForeignKeys', 'isUpdate'):
                 continue
-            ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
                 
             attr = self._get_field_instance(key)
             if isinstance(attr, (EDTController, BaseEnumController, BaseEnumController.Enum)):
                 # Busca o valor no dict com case-insensitive
                 key_upper = key.upper()
                 if key_upper in record_upper:
-                    try:
+                    try:                        
                         attr.value = record_upper[key_upper]
                     except (ValueError, TypeError):
                         # Se falhar ao setar, mantém None
                         pass
         
-        return self    
+        return self
     
-''' [END CODE] Project: SQLManager Version 4.0 / issue: #1 / made by: Nicolas Santos / created: 23/02/2026 '''
+''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 23/02/2026 '''

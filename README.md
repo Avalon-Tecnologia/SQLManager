@@ -1,6 +1,6 @@
 ﻿# SQLManager - Sistema de Gerenciamento de Banco de Dados
 
-Sistema reutilizável para gerenciamento de conexões de banco de dados, validações de dados (EDTs e BaseEnums) e controle de tabelas.
+Sistema reutilizável para gerenciamento de conexões de banco de dados, validações de dados (EDTs e BaseEnums) e controle de tabelas e views.
 
 ## Características
 
@@ -11,6 +11,7 @@ Sistema reutilizável para gerenciamento de conexões de banco de dados, valida�
 - Configuração Flexível: Suporte a múltiplos projetos sem modificar o Core
 - Type Safety: Validações de tipo e formato em runtime
 - Model Generator: Sistema automático de geração de modelos baseado no banco de dados
+- Suporte a Tables e Views: Controllers para tabelas (CRUD completo) e views (leitura)
 
 ---
 
@@ -28,7 +29,7 @@ git+https://github.com/nickzsd/SQLManager.git
 > **ATENÇÃO:** O `pip install` executa automaticamente o gerador de modelos durante a instalação. Certifique-se de que:
 > - Seu arquivo `.env` está configurado com as credenciais do banco de dados (variáveis: `DB_SERVER`, `DB_DATABASE`, `DB_USER`, `DB_PASSWORD`)
 > - A pasta `src/` existe na raiz do seu projeto
-> - Todas as tabelas no banco possuem o campo `RECID` (tipo BIGINT)
+> - Todas as tabelas e views no banco possuem o campo `RECID` (tipo BIGINT)
 >
 > **Exemplo do arquivo `.env`:**
 > ```env
@@ -56,10 +57,11 @@ Esse comando irá criar (ou atualizar) automaticamente as seguintes pastas e arq
 - src/model/EDTs/    → EDTs customizados (tipos de dados validados)
 - src/model/enum/    → Enums customizados (tipos enumerados)
 - src/model/tables/  → Classes de tabelas baseadas no banco
+- src/model/views/   → Classes de views baseadas no banco
 
 > **Importante:**
 > - O Enum `DataType` e o EDT `Recid` são obrigatórios e sempre serão gerados automaticamente.
-> - O gerador sincroniza os campos das tabelas do banco com os arquivos Python.
+> - O gerador sincroniza os campos das tabelas e views do banco com os arquivos Python.
 > - Não edite manualmente arquivos gerados, exceto para customizações documentadas.
 
 ## Importação do Pacote
@@ -70,7 +72,7 @@ Após instalar, use:
 from SQLManager import connection, controller, CoreConfig
 # ou
 from SQLManager.connection import database_connection
-from SQLManager.controller import EDTController
+from SQLManager.controller import EDTController, TableController, ViewController
 ```
 
 ## Atualizando o SQLManager
@@ -91,6 +93,9 @@ pip install --upgrade --force-reinstall git+https://github.com/nickzsd/SQLManage
 > Issue: [#1-TableController Remodel](https://github.com/nickzsd/SQLManager/issues/1)  
 > Solution [Development document](SQLManager/documents/Issues/Issue1_Note.md)
 
+> Issue: [#4-ViewController](https://github.com/nickzsd/SQLManager/issues/4)  
+> Solution [Development document](SQLManager/documents/Issues/Issue4_Note.md)
+
 ### Versão 2.0.0 (12/01/2026)
 
 **BREAKING CHANGES:**
@@ -100,6 +105,7 @@ pip install --upgrade --force-reinstall git+https://github.com/nickzsd/SQLManage
 - JOIN simplificado com `.on()` e operadores
 
 **NOVIDADES:**
+- ViewController: Suporte completo para views de banco de dados (issue #4)
 - Operadores sobrecarregados: `==`, `!=`, `<`, `<=`, `>`, `>=`, `.in_()`, `.like()`
 - Operadores lógicos: `&` (AND), `|` (OR)
 - Manager Pattern: SelectManager, InsertManager, UpdateManager, DeleteManager
@@ -137,6 +143,11 @@ Para detalhes completos: [PatchNote_2.0.md](SQLManager/documents/PatchNote_2.0.m
 ---
 
 ## Controllers - Controladoras
+
+O SQLManager fornece duas controllers principais para gerenciamento de dados:
+
+- **TableController**: Para operações completas em tabelas (SELECT, INSERT, UPDATE, DELETE)
+- **ViewController**: Para operações de leitura em views (SELECT)
 
 Para documentação detalhada das controllers, métodos e exemplos, consulte:
 
@@ -240,6 +251,25 @@ class Products(TableController):
         self.ITEMTYPE = EnumPack.ItemType()
 ```
 
+### View (src/model/views/ProductsView.py)
+```python
+from SQLManager import ViewController, EDTController
+from model import EDTPack, EnumPack
+
+class ProductsView(ViewController):
+    '''
+    View: ProductsView
+    args:
+        db_controller: Banco de dados ou transação
+    '''
+    def __init__(self, db):
+        super().__init__(db=db, source_name="ProductsView")
+        self.RECID = EDTPack.Recid()
+        self.ITEMNAME = EDTController('any', EnumPack.dataType.String, None, 100)
+        self.ITEMTYPE = EnumPack.ItemType()
+        self.CATEGORYNAME = EDTController('any', EnumPack.dataType.String, None, 50)
+```
+
 ### 1. Configure o Core no seu projeto (OBRIGATORIO)
 
 ```python
@@ -275,11 +305,11 @@ CoreConfig.register_multiple_regex({
 
 O Core INCLUI um gerador automatico de modelos (_model_update.py) que:
 - Vem junto com o Core quando instalado via pip
-- Escaneia as tabelas do banco de dados conectado
+- Escaneia as tabelas e views do banco de dados conectado
 - Gera automaticamente classes de modelo na pasta src/model/ do SEU projeto
-- Cria estrutura: src/model/EDTs/, src/model/enum/, src/model/tables/
+- Cria estrutura: src/model/EDTs/, src/model/enum/, src/model/tables/, src/model/views/
 - Atualiza automaticamente __init__.py e importacoes
-- Sincroniza campos quando tabelas sao alteradas no banco
+- Sincroniza campos quando tabelas/views sao alteradas no banco
 
 **Como usar o _model_update.py:**
 
@@ -293,8 +323,8 @@ python .venv/Lib/site-packages/SQLManager/_model/_model_update.py
 
 **Requisitos obrigatorios:**
 - Seu projeto DEVE ter uma pasta `src/` na raiz
-- O gerador criara automaticamente: `src/model/EDTs/`, `src/model/enum/`, `src/model/tables/`
-- Todas as tabelas no banco DEVEM ter o campo `RECID` (tipo BIGINT)
+- O gerador criara automaticamente: `src/model/EDTs/`, `src/model/enum/`, `src/model/tables/`, `src/model/views/`
+- Todas as tabelas e views no banco DEVEM ter o campo `RECID` (tipo BIGINT)
 
 **IMPORTANTE - Nomenclatura:**
 A coerencia entre nomes de campos no banco e EDTs/Enums e ESTRITAMENTE IMPORTANTE:
@@ -334,14 +364,21 @@ CoreConfig.register_multiple_regex({
 ### Nova API Fluente (v2.0)
 
 ```python
-from model import TablePack
+from model import TablePack, ViewPack
 
 # Instanciar tabela
 products = TablePack.Products(db)
 
+# Instanciar view
+products_view = ViewPack.ProductsView(db)
+
 # Acesso direto aos valores (sem .value)
 nome = products.NAME  # Retorna string diretamente
 products.NAME = "Novo Nome"  # Setter automático
+
+# Views têm a mesma API para leitura
+for item in products_view.select().where(products_view.PRICE > 100):
+    print(f"{item.ITEMNAME} - Categoria: {item.CATEGORYNAME}")
 
 # Queries com operadores nativos
 products.select().where(products.PRICE > 100)
@@ -535,10 +572,10 @@ email = CompanyEmail()
 email = 'joao@minhaempresa.com.br'
 ```
 
-### Sistema de Tables (v2.0)
+### Sistema de Tables e Views (v2.0)
 
 ```python
-from model import TablePack
+from model import TablePack, ViewPack
 
 # Instanciar tabela
 products = TablePack.Products(db)
@@ -563,6 +600,19 @@ products.delete()
 
 # Operações complexas
 products.select().where((products.PRICE > 50) & (products.ACTIVE == 1)).order_by(products.NAME).limit(10)
+
+# VIEWS - Apenas leitura
+products_view = ViewPack.ProductsView(db)
+
+# Select em views (mesma API que tables)
+for item in products_view.select().where(products_view.CATEGORYNAME == "Electronics"):
+    print(f"{item.ITEMNAME} - {item.CATEGORYNAME} - R$ {item.PRICE}")
+
+# Views suportam todas as operações de leitura
+products_view.select()\
+    .where((products_view.PRICE > 100) & (products_view.ACTIVE == 1))\
+    .order_by(products_view.ITEMNAME)\
+    .limit(10)
 ```
 
 ## Estrutura do Projeto Host
@@ -578,7 +628,8 @@ MeuProjeto/
 │   └── model/             # GERADO pelo _model_update.py do Core
 │       ├── EDTs/          # EDTs customizados
 │       ├── enum/          # Enums customizados
-│       └── tables/        # Tables geradas automaticamente
+│       ├── tables/        # Tables geradas automaticamente
+│       └── views/         # Views geradas automaticamente
 │
 └── .venv/                 # Core instalado AQUI via pip
     └── Lib/

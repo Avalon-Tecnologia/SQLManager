@@ -250,7 +250,7 @@ class InsertManager:
         return wrapper
 
     @validate_insert
-    def insert(controller: TableController) -> bool:
+    def insert(controller: 'TableController') -> bool:
         """
         Insere um novo registro na tabela
         Returns:

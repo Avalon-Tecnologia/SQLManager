@@ -48,11 +48,13 @@ class REGEX (EDT_Utils):
             custom_pattern = CoreConfig.get_regex(regex_id)
             return re.compile(custom_pattern) if custom_pattern else None
         
+        ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 23/02/2026 '''
         patterns: Dict[str, str] = {
             "BigInt": r"^\d+n$",
             "bool": r"^[01]$",
             "any": r"^.*$",
-            "binary": r"^(1|0)+$",
+            "binary": r"^(1|0)+$",            
+            'float': r'^-?\d+(\.\d+)?$',
             "cnpj_cpf": r"^([0-9A-Z]{2}[\.]?[0-9A-Z]{3}[\.]?[0-9A-Z]{3}[\/]?[0-9A-Z]{4}[-]?[0-9]{2})$|^([0-9]{3}[\.]?[0-9]{3}[\.]?[0-9]{3}[-]?[0-9]{2})$",
             "cnpj": r"^([0-9A-Z]{2}[\.]?[0-9A-Z]{3}[\.]?[0-9A-Z]{3}[\/]?[0-9A-Z]{4}[-]?[0-9]{2})$",
             "cpf": r"^([0-9]{3}[\.]?[0-9]{3}[\.]?[0-9]{3}[-]?[0-9]{2})$",
@@ -69,6 +71,7 @@ class REGEX (EDT_Utils):
             "password": r"^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$",
             "url": r"^(https?:\/\/)?([\w.-]+)\.([a-z]{2,})([\/\w.-]*)*\/?$",
         }
+        ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 23/02/2026 '''
         
         pattern = patterns.get(regex_id)
         return re.compile(pattern) if pattern else None    
