@@ -8,8 +8,6 @@ Lê banco de dados e sincroniza com aplicação, gerando __init__.py automaticam
 import sys
 from pathlib import Path
 
-from matplotlib.table import table
-
 ROOT_DIR = Path(__file__).parent.parent.parent.parent
 
 class utils:
