@@ -19,14 +19,17 @@ setup(
     url="https://github.com/nickzsd/SQLManager",
     packages=find_packages(include=["SQLManager", "SQLManager.*"]),
     include_package_data=True,
+    #''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 23/02/2026 '''
     package_data={
         "SQLManager": [
             "_model/*.py",
             "EDTs/*.py",
             "enum/*.py",
             "tables/*.py",
+            "views/*.py",
         ]
     },
+    #''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 23/02/2026 '''
     python_requires=">=3.8",
     install_requires=[
         "pyodbc>=4.0.0",

@@ -106,7 +106,7 @@ class DeleteManager:
         return wrapper
 
     @validate_delete
-    def delete(controller: TableController) -> bool:
+    def delete(controller: 'TableController') -> bool:
         """
         Exclui um registro da tabela
         Returns:
@@ -127,7 +127,7 @@ class DeleteManager:
         return True
     
     @staticmethod
-    def delete_from(controller: TableController) -> 'DeleteRecordsetManager':
+    def delete_from(controller: 'TableController') -> 'DeleteRecordsetManager':
         """
         Deleta múltiplos registros em massa com API fluente
         Uso: table.delete_from().where(table.CAMPO == valor)

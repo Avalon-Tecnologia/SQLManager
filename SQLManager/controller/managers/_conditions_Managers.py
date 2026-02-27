@@ -7,12 +7,16 @@ class FieldCondition:
     Representa uma condição de campo com operador para construção de WHERE clauses
     Também suporta uso em if/while através de __bool__
     '''
-    def __init__(self, field_name: str, operator: str, value: Any, table_alias: Optional[str] = None, left_value: Any = None):
-        self.field_name  = field_name
-        self.operator    = operator
-        self.value       = value
-        self.table_alias = table_alias
-        self.left_value  = left_value  # Valor do campo (lado esquerdo da comparação)
+    ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 26/02/2026 '''
+    def __init__(self, field_name: str, operator: str, value: Any, table_alias: Optional[str] = None, left_value: Any = None, right_field_name: Optional[str] = None, right_table_alias: Optional[str] = None):
+        self.field_name        = field_name
+        self.operator          = operator
+        self.value             = value
+        self.table_alias       = table_alias
+        self.left_value        = left_value  # Valor do campo (lado esquerdo da comparação)
+        self.right_field_name  = right_field_name  # Nome do campo direito (para JOINs)
+        self.right_table_alias = right_table_alias  # Alias da tabela direita (para JOINs)
+    ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 26/02/2026 '''
     
     def __and__(self, other: 'FieldCondition') -> 'BinaryExpression':
         return BinaryExpression(self, 'AND', other)
@@ -30,7 +34,9 @@ class FieldCondition:
         
         match self.operator:
             case '=':
-                return left == right
+                return left == right            
+            case '==':
+                return left == right            
             case '!=':
                 return left != right
             case '<':
@@ -60,11 +66,19 @@ class FieldCondition:
             case _:
                 return True  # Operador desconhecido, assume True para evitar falhas                    
     
+    ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 26/02/2026 '''
     def to_sql(self) -> tuple:
         '''Converte a condição para SQL'''
         prefix = f"{self.table_alias}." if self.table_alias else ""
-        sql    = f"{prefix}{self.field_name} {self.operator} ?"
+                
+        if self.right_field_name is not None:
+            right_prefix = f"{self.right_table_alias}." if self.right_table_alias else ""
+            sql = f"{prefix}{self.field_name} {self.operator} {right_prefix}{self.right_field_name}"
+            return (sql, [])  # Sem valores para binding
+                
+        sql = f"{prefix}{self.field_name} {self.operator} ?"
         return (sql, self.value)
+    ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 26/02/2026 '''
 
 class BinaryExpression:
     '''Representa uma expressão binária entre condições'''
