@@ -1,31 +1,37 @@
 # Issues [#3-AutoRouterSystem](https://github.com/nickzsd/SQLManager/issues/3) - SQLManager
+**Versão:** 4.0 | **Última Atualização:** 27/02/2026
 
-O **AutoRouter** é um módulo inteligente do SQLManager que transforma automaticamente suas classes de Tabela (`TableController`) em endpoints de API RESTful.
+O **AutoRouter** é um módulo inteligente do SQLManager que transforma automaticamente suas classes de Tabela (`TableController`) em endpoints de API RESTful **prontos para uso**.
 
 Ele elimina a necessidade de criar controllers, rotas e serviços manuais para operações CRUD (Create, Read, Update, Delete) padrão, permitindo que você exponha seu banco de dados de forma segura e imediata.
 
-## Objetivo e Benefícios
+## 🎯 Objetivo e Benefícios
 
-- **Zero Boilerplate:** Crie a tabela no banco, rode o gerador de modelos, e a rota já existe.
+- **Zero Boilerplate:** Crie a tabela no banco, rode o gerador de modelos, e a rota já existe automaticamente.
+- **Registro Automático (Flask):** Passe o objeto `app` Flask e todas as rotas são criadas instantaneamente.
 - **Padronização:** Todas as respostas seguem o mesmo formato JSON, com códigos HTTP corretos (200, 201, 400, 404, 500).
 - **Segurança:** Validação automática de tipos de dados (EDTs) e Enums antes de tocar no banco.
 - **Filtros Poderosos:** Suporte nativo a filtros complexos via URL (maior que, contém, diferente, etc.).
+- **Documentação Automática:** Gera coleção Postman completa com todos os endpoints.
 
-## Quando Usar vs. Quando NÃO Usar
+## ✅ Quando Usar vs. ❌ Quando NÃO Usar
 
-| Use o AutoRouter quando... | NÃO use o AutoRouter quando... |
+| ✅ Use o AutoRouter quando... | ❌ NÃO use o AutoRouter quando... |
 | :--- | :--- |
 | Precisa de CRUD padrão (Listar, Ler, Criar, Deletar). | A operação exige orquestração complexa de múltiplos serviços. |
 | Tabelas de cadastro, configurações, logs. | Existem regras de negócio muito específicas que não cabem no `validate_write` da tabela. |
 | Prototipagem rápida de API e Front-end. | Relatórios analíticos pesados (BI) que exigem queries otimizadas manualmente. |
+| Microserviços RESTful simples. | Operações que envolvem múltiplas tabelas com transações complexas. |
 
 ---
 
-## Ativação e Configuração
+## 🚀 Inicialização e Configuração
+
+### Passo 1: Configurar o CoreConfig
 
 O AutoRouter é **OPCIONAL**. Para ativá-lo, você deve configurar o `CoreConfig` na inicialização da sua aplicação.
 
-### Exemplo Completo de Configuração
+**Exemplo Completo de Configuração:**
 
 ```python
 from SQLManager import CoreConfig
@@ -67,11 +73,81 @@ router_config = {
 CoreConfig.configure_router(router_config)
 ```
 
+### Passo 2: Inicializar o AutoRouter
+
+O AutoRouter agora suporta **dois modos de operação**:
+
+#### **Modo 1: Flask com Registro Automático (Recomendado)**
+
+No modo Flask, todas as rotas são criadas automaticamente ao instanciar o AutoRouter:
+
+```python
+from flask import Flask
+from SQLManager.connection import database_connection
+from SQLManager.controller.RouterController import AutoRouter
+
+app = Flask(__name__)
+
+# Conecta ao banco de dados
+db = database_connection()
+
+# Cria o AutoRouter e passa o app Flask
+# As rotas são registradas AUTOMATICAMENTE!
+router = AutoRouter(db, app=app)
+
+@app.route('/')
+def index():
+    routes = router.get_registered_routes()
+    return {
+        "message": "SQLManager API está ativa!",
+        "tables": list(routes.keys()),
+        "total_routes": sum(len(r) for r in routes.values())
+    }
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
+```
+
+**O que acontece:**
+- ✅ Todas as tabelas são descobertas automaticamente
+- ✅ Rotas CRUD são criadas para cada tabela permitida
+- ✅ Rotas customizadas (do CoreConfig) são registradas
+- ✅ Você pode rodar `app.run()` imediatamente
+
+#### **Modo 2: Manual (Para frameworks customizados)**
+
+Se você não usa Flask ou quer controle total, pode processar requisições manualmente:
+
+```python
+from SQLManager.connection import database_connection
+from SQLManager.controller.RouterController import AutoRouter
+
+db = database_connection()
+router = AutoRouter(db)  # SEM passar o app
+
+# Processa requisição manualmente
+response = router.handle_request(
+    method='GET',
+    table_name='Products',
+    path_parts=['1'],  # ID ou rota customizada
+    query_params={'page': '1', 'limit': '10'},
+    body={}
+)
+
+print(response)
+# {"status": 200, "data": {...}, "meta": {...}}
+```
+
 ---
 
-## 🛣️ Endpoints Disponíveis
+## 🛣️ Rotas Criadas Automaticamente
 
-Assumindo que sua aplicação rode em `http://localhost:8000` e o prefixo seja `/api`.
+Quando você inicializa o AutoRouter com um app Flask, as seguintes rotas são criadas **automaticamente** para cada tabela:
+
+Assumindo:
+- **Servidor:** `http://localhost:5000`
+- **Sufixo:** `manager` (configurado no CoreConfig via `url_suffix`)
+- **Tabela:** `Products`
 
 ### 1. Listagem e Filtros (GET)
 **Rota:** `GET /api/{Tabela}`
@@ -317,130 +393,194 @@ Se você definiu uma rota customizada no `CoreConfig` (ex: para limpar logs anti
 *   **Configuração:** `{"route": "clear_old", ...}`
 *   **URL:** `DELETE http://localhost:5000/manager/Logs/clear_old`
 
-## Geração de Coleção
+## 📦 Geração de Coleção Postman
 
-O AutoRouter pode gerar automaticamente uma coleção Postman (v2.1) para todos os endpoints CRUD dinâmicos, facilitando a documentação e o teste da sua API.
+O AutoRouter pode gerar automaticamente uma **coleção Postman (v2.1)** completa com todos os endpoints disponíveis, incluindo rotas customizadas.
+
+### Para Que Serve?
+
+- 📝 **Documentação automática** da sua API
+- 🧪 **Testes rápidos** sem precisar escrever código
+- 👥 **Compartilhamento** com equipe de front-end ou QA
+- 🔄 **Atualização instantânea** quando você adiciona novas tabelas
 
 ### Como Gerar a Coleção
 
-Você pode expor um endpoint na sua aplicação (ex: Flask, FastAPI) que chama o método `generate_collection` do `AutoRouter`.
+**Opção 1: Via Código Python (Recomendado)**
 
 ```python
-# Exemplo em uma aplicação Flask
-from flask import Flask, jsonify, request
-from SQLManager.controller.RouterController import AutoRouter
 from SQLManager.connection import database_connection
-from SQLManager.CoreConfig import CoreConfig
-import os
+from SQLManager.controller.RouterController import AutoRouter
+import json
 
-app = Flask(__name__)
-
-# Configuração do CoreConfig e AutoRouter (assumindo que já foi feita na inicialização da app)
-# Exemplo:
-# CoreConfig.configure(db_server=os.getenv('DB_SERVER'), ...)
-# CoreConfig.configure_router({"enable_dynamic_routes": True, "url_suffix": "api", ...})
-
-# Inicialize a conexão com o banco de dados e o AutoRouter
-# Em um ambiente de produção, a gestão de conexões e a inicialização
-# do router seriam feitas de forma mais robusta (ex: com app context ou injeção de dependência).
-db = database_connection() 
-try:
-    db.connect() # Tenta conectar, pode falhar se o DB não estiver disponível
-except Exception as e:
-    print(f"Aviso: Não foi possível conectar ao banco de dados para o exemplo: {e}")
-    # Em um cenário real, você trataria isso de forma mais robusta.
-
+# Inicializa o router
+db = database_connection()
 router = AutoRouter(db)
 
-@app.route('/generate-collection', methods=['GET'])
-def get_postman_collection():
-    # A URL base será a da sua aplicação. O método generate_collection
-    # adicionará o sufixo configurado (ex: /api) automaticamente.
-    # Ex: se a app roda em http://localhost:5000, a base_url será http://localhost:5000
-    collection = router.generate_collection(base_url=request.host_url.rstrip('/'))
-    return jsonify(collection)
+# Gera a coleção Postman
+collection = router.generate_collection(
+    base_url="http://localhost:5000",
+    collection_name="SQLManager API - Meu Projeto"
+)
 
-if __name__ == '__main__':
-    # Exemplo de configuração mínima para rodar este snippet
-    CoreConfig.configure(
-        db_server=os.getenv('DB_SERVER', 'localhost'),
-        db_database=os.getenv('DB_DATABASE', 'TestDB'),
-        db_user=os.getenv('DB_USER', 'sa'),
-        db_password=os.getenv('DB_PASSWORD', 'your_password')
-    )
-    CoreConfig.configure_router({
-        "enable_dynamic_routes": True,
-        "url_suffix": "api", # Define o sufixo para as URLs geradas no Postman
-        "exclude_tables": ["SysLog"]        
-    })
-    app.run(debug=True, port=5000)
+# Salva em arquivo JSON
+with open('postman_collection.json', 'w', encoding='utf-8') as f:
+    json.dump(collection, f, indent=2, ensure_ascii=False)
+
+print("✅ Coleção Postman gerada: postman_collection.json")
+print(f"📊 Total de tabelas: {len(collection['item'])}")
 ```
+
+**Opção 2: Via Endpoint Flask**
+
+```python
+from flask import jsonify, request
+
+@app.route('/api/postman-collection', methods=['GET'])
+def get_postman_collection():
+    """Endpoint para baixar a coleção Postman"""
+    collection = router.generate_collection(
+        base_url=request.host_url.rstrip('/'),
+        collection_name="SQLManager API"
+    )
+    return jsonify(collection)
+```
+
+Acesse: `http://localhost:5000/api/postman-collection` e salve o JSON.
+
+### O Que É Gerado?
+
+A coleção Postman inclui **todas as rotas** por tabela:
+
+```json
+{
+  "info": {
+    "name": "SQLManager API - Meu Projeto",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Products",
+      "item": [
+        {"name": "List Products", "request": {"method": "GET", "url": "http://localhost:5000/manager/Products?page=1&limit=10"}},
+        {"name": "Get Products by ID", "request": {"method": "GET", "url": "http://localhost:5000/manager/Products/1"}},
+        {"name": "Create Products", "request": {"method": "POST", "url": "...", "body": {...}}},
+        {"name": "Update Products", "request": {"method": "PATCH", "url": "..."}},
+        {"name": "Delete Products", "request": {"method": "DELETE", "url": "..."}},
+        {"name": "Get Products - active", "request": {"method": "GET", "url": ".../active"}}
+      ]
+    }
+  ]
+}
+```
+
+### Importando no Postman
+
+1. Abra o Postman
+2. Clique em **Import**
+3. Selecione o arquivo `postman_collection.json`
+4. ✅ Todas as rotas estarão prontas para teste!
 
 ### Configuração do Sufixo da URL
 
-O sufixo para as URLs geradas na coleção Postman é definido na configuração do `CoreConfig` através da chave `url_suffix`.
+O sufixo das URLs na coleção é definido no `CoreConfig`:
 
--   **Padrão:** Se `url_suffix` não for especificado, o valor padrão será `'manager'`.
--   **Customizado:** Se você configurar `url_suffix: 'api/v1'`, as URLs na coleção serão `http://localhost:5000/api/v1/{Tabela}`.
-
-**Exemplo de Configuração:**
 ```python
-from SQLManager import CoreConfig
-
 CoreConfig.configure_router({
-    "enable_dynamic_routes": True,
-    "url_suffix": "api", # As URLs no Postman serão /api/{Tabela}
-    # ... outras configurações
+    "url_suffix": "api/v1"  # URLs serão /api/v1/{Tabela}
 })
+```
+
+- **Padrão:** `manager` → URLs: `/manager/Products`
+- **Customizado:** `api/v1` → URLs: `/api/v1/Products`
+
+---
+
+## 🔍 Listando Rotas Registradas
+
+Para ver todas as rotas que foram registradas automaticamente, use o método `get_registered_routes()`:
+
+```python
+from flask import Flask
+from SQLManager.connection import database_connection
+from SQLManager.controller.RouterController import AutoRouter
+
+app = Flask(__name__)
+db = database_connection()
+router = AutoRouter(db, app=app)
+
+# Obtém informações sobre todas as rotas
+routes_info = router.get_registered_routes()
+
+print("\n📋 Rotas Registradas Automaticamente:")
+print("=" * 80)
+for table_name, routes in routes_info.items():
+    print(f"\n📦 Tabela: {table_name}")
+    for route in routes:
+        print(f"  {route['method']:7} {route['endpoint']:45} → {route['description']}")
+
+print(f"\n✅ Total: {sum(len(r) for r in routes_info.values())} rotas em {len(routes_info)} tabelas")
+```
+
+**Saída exemplo:**
+```
+📋 Rotas Registradas Automaticamente:
+================================================================================
+
+📦 Tabela: Products
+  GET     /manager/Products                             → Listar Products
+  GET     /manager/Products/{id}                        → Obter Products por ID
+  POST    /manager/Products                             → Criar Products
+  PATCH   /manager/Products/{id}                        → Atualizar Products
+  DELETE  /manager/Products/{id}                        → Deletar Products
+  GET     /manager/Products/active                      → Rota customizada: active
+
+📦 Tabela: Customers
+  GET     /manager/Customers                            → Listar Customers
+  GET     /manager/Customers/{id}                       → Obter Customers por ID
+
+✅ Total: 8 rotas em 2 tabelas
 ```
 
 ---
 
-## Exemplo de Verificação de URL (Debug)
+## 🧪 Testando Rotas (Debug)
 
-Para verificar como o `AutoRouter` processa uma URL sem precisar subir um servidor web, você pode chamar diretamente o método `handle_request`.
+Para verificar como o `AutoRouter` processa requisições sem subir um servidor:
 
 ```python
 from SQLManager.controller.RouterController import AutoRouter
-from SQLManager.CoreConfig import CoreConfig
-from unittest.mock import MagicMock
+from SQLManager.connection import database_connection
 
-# 1. Configuração (Simulada)
-CoreConfig.reset()
-CoreConfig.configure_router({
-    "enable_dynamic_routes": True,
-    "url_suffix": "api",
-    "tables": {
-        "Products": {
-            "allowed_methods": ["GET", "POST", "DELETE"]
-        }
-    }
-})
+db = database_connection()
+router = AutoRouter(db)  # Modo manual
 
-# 2. Inicialização (Mockando o banco para não precisar de conexão real neste teste)
-mock_db = MagicMock()
-router = AutoRouter(mock_db)
-
-# --- TESTES DE VERIFICAÇÃO ---
-
-print("=== Teste 1: Listar Produtos (GET /Products?page=1&limit=5) ===")
-# Simula: GET http://localhost/api/Products?page=1&limit=5
+# Teste 1: Listar produtos com paginação
 response = router.handle_request(
     method="GET",
     table_name="Products",
-    path_parts=[], 
+    path_parts=[],
     query_params={"page": "1", "limit": "5"}
 )
-print(f"Status: {response.get('status')}")
+print(f"Status: {response['status']}")
+print(f"Dados: {response.get('data', [])}")
 
-print("\n=== Teste 2: Buscar por ID (GET /Products/123) ===")
-# Simula: GET http://localhost/api/Products/123
+# Teste 2: Buscar por ID
 response = router.handle_request(
     method="GET",
     table_name="Products",
     path_parts=["123"]
 )
-print(f"Status: {response.get('status')}")
+print(f"Status: {response['status']}")
+
+# Teste 3: Criar produto
+response = router.handle_request(
+    method="POST",
+    table_name="Products",
+    body={"NAME": "Produto Teste", "PRICE": 99.90}
+)
+print(f"Status: {response['status']}")
+print(f"RECID criado: {response.get('data', {}).get('RECID')}")
 ``` 
 
 ---
@@ -548,4 +688,81 @@ def test_decorator_with_positional_arguments(self):
 ### Arquivos Modificados
 - `SQLManager/controller/RouterController.py` (linhas 44-107, 110-153, 182-221)
 - `SQLManager/tests/test_AutoRouter.py` (testes completos do decorator)
-- `SQLManager/__init__.py` (remoção de `StartRoutes()` inexistente) 
+- `SQLManager/__init__.py` (remoção de `StartRoutes()` inexistente)
+
+---
+
+## 🆕 Atualização v4.0 - Registro Automático Flask (27/02/2026)
+
+### Mudanças Implementadas
+
+#### 1. **Novo Parâmetro `app` no Construtor**
+```python
+# Antes (v3.0)
+router = AutoRouter(db)
+
+# Agora (v4.0)
+router = AutoRouter(db, app=app)  # Rotas criadas automaticamente!
+```
+
+#### 2. **Método `_register_routes()`**
+Registra automaticamente todos os endpoints Flask:
+- Lista todos as tabelas disponíveis via `_discover_tables()`
+- Cria rotas para cada método HTTP permitido (GET, POST, PATCH, DELETE)
+- Registra rotas customizadas do CoreConfig
+- Usa closures para evitar problemas de binding tardio
+
+#### 3. **Método `get_registered_routes()`**
+Retorna dicionário com informações de todas as rotas:
+```python
+routes = router.get_registered_routes()
+# {
+#   "Products": [
+#     {"method": "GET", "endpoint": "/manager/Products", "description": "Listar Products"},
+#     ...
+#   ]
+# }
+```
+
+#### 4. **Método `generate_collection()` Melhorado**
+Agora gera **coleção Postman completa**:
+- ✅ Todas as rotas por tabela (não apenas uma)
+- ✅ Rotas customizadas (GET/DELETE)
+- ✅ Estrutura Postman v2.1 completa
+- ✅ Informações de metadados
+
+### Arquivos Criados
+- `SQLManager/controller/example_autorouter_usage.py` - Exemplos de uso completos
+- `SQLManager/documents/Issues/Issue3_AutoRouter_Update.md` - Documentação da atualização
+
+---
+
+## 📚 Referências e Exemplos
+
+### Exemplo Completo de Aplicação Flask
+
+Veja o arquivo [`example_autorouter_usage.py`](../../controller/example_autorouter_usage.py) para exemplos completos de:
+- Inicialização com Flask
+- Modo manual
+- Geração de coleção Postman
+- Listagem de rotas
+- Configuração avançada
+
+### Testes Unitários
+
+Veja [`test_AutoRouter.py`](../../tests/test_AutoRouter.py) para exemplos de:
+- Testes de validação
+- Mock de banco de dados
+- Testes de rotas CRUD
+- Testes de decorator
+
+---
+
+## 🎓 Autores e Histórico
+
+| Versão | Data | Autor | Mudanças |
+|--------|------|-------|----------|
+| 1.0 | 25/02/2026 | Matheus | Implementação inicial do AutoRouter |
+| 2.0 | 26/02/2026 | Nicolas Santos | Refatoração do decorator `_pre_handle` |
+| 3.0 | 27/02/2026 | Nicolas Santos | Cache de classes e field maps |
+| 4.0 | 27/02/2026 | Matheus | Registro automático Flask + generate_collection melhorado | 

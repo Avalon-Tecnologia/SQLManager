@@ -15,6 +15,12 @@ from ..connection import database_connection
 from .TableController   import TableController
 from .SystemController  import SystemController
 
+try:
+    from flask import Flask, request, jsonify
+    FLASK_AVAILABLE = True
+except ImportError:
+    FLASK_AVAILABLE = False
+
 class AutoRouter:
     """
     Controladora de Rotas Automáticas (AutoRouter)
@@ -23,12 +29,19 @@ class AutoRouter:
     eliminando a necessidade de criar controllers manuais para CRUD padrão.
     
     Uso:
+        # Modo tradicional:
         router = AutoRouter(db_connection)
         response = router.handle_request('GET', 'Products', path_parts=['1'])
+        
+        # Modo Flask (auto-registro de rotas):
+        app = Flask(__name__)
+        router = AutoRouter(db_connection, app=app)
+        # Rotas são registradas automaticamente
     """    
     
-    def __init__(self, db: database_connection):
+    def __init__(self, db: database_connection, app: Optional[Any] = None):
         self.db      = db
+        self.app     = app
         self.config  = CoreConfig.get_router_config()
         self.enabled = self.config.get('enable_dynamic_routes', False)
         
@@ -46,7 +59,13 @@ class AutoRouter:
 
         # Cache de classes e metadados para evitar reflection repetitivo
         self._class_cache:     Dict[str, Any]            = {}
-        self._field_map_cache: Dict[str, Dict[str, str]] = {}        
+        self._field_map_cache: Dict[str, Dict[str, str]] = {}
+        
+        # Registra rotas Flask automaticamente se app foi fornecido
+        if self.app and self.enabled:
+            if not FLASK_AVAILABLE:
+                raise ImportError("Flask não está disponível. Instale com: pip install flask")
+            self._register_routes()        
 
     ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #3 / made by: Nicolas Santos / created: 27/02/2026 '''
     def _pre_handle(func):
@@ -165,6 +184,77 @@ class AutoRouter:
         
         return self._get_table_class_by_name(self.current_table.source_name)
     ''' [END CODE] Project: SQLManager Version 4.0 / issue: #3 / made by: Nicolas Santos / created: 27/02/2026 '''
+
+    ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #3 / made by: Matheus / created: 27/02/2026 '''
+    def _register_routes(self):
+        """
+        Registra automaticamente todas as rotas Flask para as tabelas descobertas.
+        """
+        if not self.app:
+            return
+        
+        suffix = self.config.get('url_suffix', 'manager').strip('/')
+        tables = self._discover_tables()
+        
+        for table_name in tables:
+            table_upper = table_name.upper()
+            table_config = self._tables_config.get(table_upper, {})
+            allowed_methods = table_config.get('allowed_methods', ["GET", "POST", "PATCH", "DELETE"])
+            
+            # Cria closures para cada tabela (evita problema de binding tardio)
+            self._register_table_routes(table_name, allowed_methods, suffix)
+    
+    def _register_table_routes(self, table_name: str, allowed_methods: List[str], suffix: str):
+        """
+        Registra rotas Flask para uma tabela específica.
+        """
+        # Rota para lista/criação: /{suffix}/{table}
+        base_route = f"/{suffix}/{table_name}"
+        list_methods = [m for m in ['GET', 'POST'] if m in allowed_methods]
+        
+        if list_methods:
+            @self.app.route(base_route, methods=list_methods, endpoint=f"{table_name}_list")
+            def table_list():
+                method = request.method
+                query_params = request.args.to_dict()
+                body = request.get_json() if request.is_json else {}
+                
+                result = self.handle_request(
+                    method=method,
+                    table_name=table_name,
+                    path_parts=[],
+                    query_params=query_params,
+                    body=body
+                )
+                
+                status = result.pop('status', 200)
+                return jsonify(result), status
+        
+        # Rota para operações com ID: /{suffix}/{table}/{id}
+        detail_route = f"{base_route}/<path:resource_path>"
+        detail_methods = [m for m in ['GET', 'PATCH', 'DELETE'] if m in allowed_methods]
+        
+        if detail_methods:
+            @self.app.route(detail_route, methods=detail_methods, endpoint=f"{table_name}_detail")
+            def table_detail(resource_path):
+                method = request.method
+                query_params = request.args.to_dict()
+                body = request.get_json() if request.is_json else {}
+                
+                # Divide o path (pode ser ID ou rota customizada)
+                path_parts = resource_path.split('/') if resource_path else []
+                
+                result = self.handle_request(
+                    method=method,
+                    table_name=table_name,
+                    path_parts=path_parts,
+                    query_params=query_params,
+                    body=body
+                )
+                
+                status = result.pop('status', 200)
+                return jsonify(result), status
+    ''' [END CODE] Project: SQLManager Version 4.0 / issue: #3 / made by: Matheus / created: 27/02/2026 '''
 
     def _get_field_map(self) -> Dict[str, str]:
         """
@@ -489,6 +579,69 @@ class AutoRouter:
                 tables.append(name)
         
         return sorted(tables)
+    
+    def get_registered_routes(self) -> Dict[str, List[Dict[str, str]]]:
+        """
+        Retorna informações sobre todas as rotas registradas.
+        
+        Returns:
+            Dict com formato: {
+                'table_name': [
+                    {'method': 'GET', 'endpoint': '/manager/table_name'},
+                    {'method': 'POST', 'endpoint': '/manager/table_name'},
+                    ...
+                ]
+            }
+        """
+        if not self.enabled:
+            return {}
+        
+        suffix = self.config.get('url_suffix', 'manager').strip('/')
+        tables = self._discover_tables()
+        routes_info = {}
+        
+        for table_name in tables:
+            table_upper = table_name.upper()
+            table_config = self._tables_config.get(table_upper, {})
+            allowed_methods = table_config.get('allowed_methods', ["GET", "POST", "PATCH", "DELETE"])
+            
+            routes = []
+            base_endpoint = f"/{suffix}/{table_name}"
+            
+            if "GET" in allowed_methods:
+                routes.append({"method": "GET", "endpoint": base_endpoint, "description": f"Listar {table_name}"})
+                routes.append({"method": "GET", "endpoint": f"{base_endpoint}/{{id}}", "description": f"Obter {table_name} por ID"})
+            
+            if "POST" in allowed_methods:
+                routes.append({"method": "POST", "endpoint": base_endpoint, "description": f"Criar {table_name}"})
+            
+            if "PATCH" in allowed_methods:
+                routes.append({"method": "PATCH", "endpoint": f"{base_endpoint}/{{id}}", "description": f"Atualizar {table_name}"})
+            
+            if "DELETE" in allowed_methods:
+                routes.append({"method": "DELETE", "endpoint": f"{base_endpoint}/{{id}}", "description": f"Deletar {table_name}"})
+            
+            # Rotas customizadas GET
+            for custom_route in table_config.get('custom_get', []):
+                route_name = custom_route.get('route')
+                routes.append({
+                    "method": "GET", 
+                    "endpoint": f"{base_endpoint}/{route_name}", 
+                    "description": f"Rota customizada: {route_name}"
+                })
+            
+            # Rotas customizadas DELETE
+            for custom_route in table_config.get('custom_delete', []):
+                route_name = custom_route.get('route')
+                routes.append({
+                    "method": "DELETE", 
+                    "endpoint": f"{base_endpoint}/{route_name}", 
+                    "description": f"Rota customizada: {route_name}"
+                })
+            
+            routes_info[table_name] = routes
+        
+        return routes_info
 
     def generate_collection(self, base_url: str = "http://localhost:5000", collection_name: str = "SQLManager_API") -> Dict[str, Any]:
         """
@@ -543,34 +696,99 @@ class AutoRouter:
                     u["query"] = q_list
                 return u
 
-            match allowed:
-                case ["GET"]:
+            # Adiciona requisições para cada método permitido
+            if "GET" in allowed:
+                table_items.append({
+                    "name": f"List {table_name}",
+                    "request": {
+                        "method": "GET", 
+                        "header": [], 
+                        "url": make_url([table_name], "page=1&limit=10")
+                    }
+                })
+                table_items.append({
+                    "name": f"Get {table_name} by ID",
+                    "request": {
+                        "method": "GET", 
+                        "header": [], 
+                        "url": make_url([table_name, "1"])
+                    }
+                })
+                
+                # Adiciona rotas customizadas GET
+                for custom_route in table_config.get('custom_get', []):
+                    route_name = custom_route.get('route')
                     table_items.append({
-                        "name": f"List {table_name}",
-                        "request": {"method": "GET", "header": [], "url": make_url([table_name], "page=1&limit=10")}
+                        "name": f"Get {table_name} - {route_name}",
+                        "request": {
+                            "method": "GET",
+                            "header": [],
+                            "url": make_url([table_name, route_name])
+                        }
                     })
+            
+            if "POST" in allowed:
+                table_items.append({
+                    "name": f"Create {table_name}",
+                    "request": {
+                        "method": "POST", 
+                        "header": [{"key": "Content-Type", "value": "application/json"}], 
+                        "body": {
+                            "mode": "raw", 
+                            "raw": json.dumps({"FIELD": "VALUE"}, indent=4)
+                        }, 
+                        "url": make_url([table_name])
+                    }
+                })
+            
+            if "PATCH" in allowed:
+                table_items.append({
+                    "name": f"Update {table_name}",
+                    "request": {
+                        "method": "PATCH", 
+                        "header": [{"key": "Content-Type", "value": "application/json"}], 
+                        "body": {
+                            "mode": "raw", 
+                            "raw": json.dumps({"FIELD": "NEW_VALUE"}, indent=4)
+                        }, 
+                        "url": make_url([table_name, "1"])
+                    }
+                })
+            
+            if "DELETE" in allowed:
+                table_items.append({
+                    "name": f"Delete {table_name}",
+                    "request": {
+                        "method": "DELETE", 
+                        "header": [], 
+                        "url": make_url([table_name, "1"])
+                    }
+                })
+                
+                # Adiciona rotas customizadas DELETE
+                for custom_route in table_config.get('custom_delete', []):
+                    route_name = custom_route.get('route')
                     table_items.append({
-                        "name": f"Get {table_name} by ID",
-                        "request": {"method": "GET", "header": [], "url": make_url([table_name, "1"])}
+                        "name": f"Delete {table_name} - {route_name}",
+                        "request": {
+                            "method": "DELETE",
+                            "header": [],
+                            "url": make_url([table_name, route_name])
+                        }
                     })
-                case ["POST"]:
-                    table_items.append({
-                        "name": f"Create {table_name}",
-                        "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": json.dumps({"FIELD": "VALUE"}, indent=4)}, "url": make_url([table_name])}
-                    })
-                case ["PATCH"]:
-                    table_items.append({
-                        "name": f"Update {table_name}",
-                        "request": {"method": "PATCH", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": json.dumps({"FIELD": "NEW_VALUE"}, indent=4)}, "url": make_url([table_name, "1"])}
-                    })
-                case ["DELETE"]:
-                    table_items.append({
-                        "name": f"Delete {table_name}",
-                        "request": {"method": "DELETE", "header": [], "url": make_url([table_name, "1"])}
-                    })            
             
             if table_items:
                 item_list.append({"name": table_name, "item": table_items})
 
-        return {"item": item_list}
+        collection = {
+            "info": {
+                "name": collection_name,
+                "_postman_id": "auto-generated",
+                "description": "Auto-generated API collection from SQLManager AutoRouter",
+                "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+            },
+            "item": item_list
+        }
+        
+        return collection
 ''' [END CODE] Project: SQLManager Version 4.0 / issue: #3 / made by: Matheus / created: 25/02/2026 ''' 
