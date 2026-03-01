@@ -154,7 +154,13 @@ class AutoRouter:
 
         module = None
         
-        possible_modules = ["model.TablePack", "src.model.TablePack"]                 
+        # Mesmos caminhos do _discover_tables
+        possible_modules = [
+            "model.TablePack",
+            "src.model.TablePack",
+            "model.tables",
+            "src.model.tables",
+        ]
 
         for mod_name in possible_modules:
             try:
@@ -167,6 +173,18 @@ class AutoRouter:
             return None
         
         # Busca case-insensitive pela classe da tabela
+        # Primeiro tenta __all__ se existir
+        if hasattr(module, '__all__'):
+            for name in module.__all__:
+                if name.upper() == table_upper:
+                    try:
+                        cls = getattr(module, name)
+                        self._class_cache[table_upper] = cls
+                        return cls
+                    except AttributeError:
+                        continue
+        
+        # Fallback: busca em dir(module)
         for name in dir(module):
             if name.upper() == table_upper:
                 cls = getattr(module, name)
@@ -577,28 +595,68 @@ class AutoRouter:
         Descobre todas as tabelas disponíveis no TablePack para geração de documentação.
         """
         tables = []
-        possible_modules = ["model.TablePack", "src.model.TablePack"]
+        # Tenta diferentes estruturas de projeto
+        possible_modules = [
+            "model.TablePack",      # Estrutura padrão SQLManager
+            "src.model.TablePack",  # Estrutura com src/
+            "model.tables",         # TablePack via import as
+            "src.model.tables",     # src/ + tables
+        ]
+        
         module = None
+        tried_paths = []
         
         for mod_name in possible_modules:
+            tried_paths.append(mod_name)
             try:
                 module = importlib.import_module(mod_name)
+                print(f"{SystemController.custom_text('[AutoRouter]', 'green')} Módulo encontrado: {mod_name}")
                 break
-            except ImportError:
+            except ImportError as e:
                 continue
         
         if not module:
+            print(f"{SystemController.custom_text('[AutoRouter]', 'yellow')} Nenhum módulo TablePack encontrado.")
+            print(f"  Caminhos tentados: {', '.join(tried_paths)}")
             return []
-            
-        for name in dir(module):
-            if name.startswith('_'): continue
-            # Ignora imports que não são classes ou que estão na lista de exclusão
-            if name.upper() in self._exclude_tables:
-                continue
+        
+        # Verifica se há __all__ definido no módulo
+        if hasattr(module, '__all__'):
+            print(f"{SystemController.custom_text('[AutoRouter]', 'cyan')} Usando __all__ do módulo ({len(module.__all__)} itens)")
+            for name in module.__all__:
+                if name.startswith('_'):
+                    continue
+                if name.upper() in self._exclude_tables:
+                    print(f"  - Ignorando {name} (na lista de exclusão)")
+                    continue
                 
-            attr = getattr(module, name)
-            if isinstance(attr, type):
-                tables.append(name)
+                try:
+                    attr = getattr(module, name)
+                    if isinstance(attr, type):
+                        tables.append(name)
+                        print(f"  + {name}")
+                except AttributeError:
+                    continue
+        else:
+            # Fallback: itera sobre dir(module)
+            print(f"{SystemController.custom_text('[AutoRouter]', 'cyan')} Explorando módulo via dir()")
+            for name in dir(module):
+                if name.startswith('_'):
+                    continue
+                if name.upper() in self._exclude_tables:
+                    print(f"  - Ignorando {name} (na lista de exclusão)")
+                    continue
+                    
+                try:
+                    attr = getattr(module, name)
+                    if isinstance(attr, type):
+                        tables.append(name)
+                        print(f"  + {name}")
+                except:
+                    continue
+        
+        if not tables:
+            print(f"{SystemController.custom_text('[AutoRouter]', 'yellow')} Nenhuma classe de tabela encontrada no módulo.")
         
         return sorted(tables)
     
