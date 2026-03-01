@@ -6,6 +6,7 @@ from typing    import Any, Dict, List, Optional, Union
 import importlib
 import inspect
 import json
+import os
 import traceback
 from unittest import case
 
@@ -204,6 +205,24 @@ class AutoRouter:
     ''' [END CODE] Project: SQLManager Version 4.0 / issue: #3 / made by: Nicolas Santos / created: 27/02/2026 '''
 
     ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #3 / made by: Matheus / created: 27/02/2026 '''
+    def _should_print_logs(self) -> bool:
+        """
+        Verifica se devemos imprimir logs de inicialização.
+        Evita duplicação quando Flask está em modo debug (reloader).
+        
+        Returns:
+            True se devemos imprimir, False caso contrário
+        """
+        # Se WERKZEUG_RUN_MAIN não existe, estamos fora do Flask ou em produção
+        # Neste caso, sempre imprimimos
+        werkzeug_main = os.environ.get('WERKZEUG_RUN_MAIN')
+        if werkzeug_main is None:
+            return True
+        
+        # Se WERKZEUG_RUN_MAIN == 'true', estamos no processo recarregado
+        # Este é o processo que realmente executa a aplicação
+        return werkzeug_main == 'true'
+    
     def _register_routes(self):
         """
         Registra automaticamente todas as rotas Flask para as tabelas descobertas.
@@ -228,7 +247,9 @@ class AutoRouter:
             routes_count = self._register_table_routes(table_name, allowed_methods, suffix)
             total_routes += routes_count
         
-        print(f"{SystemController.custom_text('[AutoRouter]', 'green')} {total_routes} rotas registradas (/{suffix}/)")
+        # Imprime apenas no processo recarregado do Flask (evita duplicação)
+        if self._should_print_logs():
+            print(f"{SystemController.custom_text('[AutoRouter]', 'green')} {total_routes} rotas registradas (/{suffix}/)")
     
     def _register_table_routes(self, table_name: str, allowed_methods: List[str], suffix: str) -> int:
         """
@@ -609,7 +630,8 @@ class AutoRouter:
                 continue
         
         if not module:
-            print(f"{SystemController.custom_text('[AutoRouter]', 'yellow')} Nenhum módulo TablePack encontrado.")
+            if self._should_print_logs():
+                print(f"{SystemController.custom_text('[AutoRouter]', 'yellow')} Nenhum módulo TablePack encontrado.")
             return []
         
         # Verifica se há __all__ definido no módulo
@@ -631,12 +653,14 @@ class AutoRouter:
                 continue
         
         if not tables:
-            print(f"{SystemController.custom_text('[AutoRouter]', 'yellow')} Nenhuma tabela encontrada.")
+            if self._should_print_logs():
+                print(f"{SystemController.custom_text('[AutoRouter]', 'yellow')} Nenhuma tabela encontrada.")
         else:
-            msg = f"Módulo '{module_name}' - {len(tables)} tabela(s) descoberta(s)"
-            if excluded_count > 0:
-                msg += f" ({excluded_count} excluída(s))"
-            print(f"{SystemController.custom_text('[AutoRouter]', 'green')} {msg}")
+            if self._should_print_logs():
+                msg = f"Módulo '{module_name}' - {len(tables)} tabela(s) descoberta(s)"
+                if excluded_count > 0:
+                    msg += f" ({excluded_count} excluída(s))"
+                print(f"{SystemController.custom_text('[AutoRouter]', 'green')} {msg}")
         
         return sorted(tables)
     
