@@ -41,7 +41,7 @@ class NumberSequenceController:
         
         try:
             self.Header.select().where(self.Header.RECID == reference).join(self.Lines).on(self.Header.RECID == self.Lines.REFRECID).order_by(self.Lines.LINENUM).execute()
-            if self.Header.rowcount() == 0 and self.Lines.rowcount() == 0:
+            if not self.Header.records or not self.Lines.records:
                 return {"message": "Sequence not found"}
             
             nextNum = self.Header.NEXTNUM.value
@@ -119,7 +119,7 @@ class NumberSequenceController:
             self.Header.CURNUM      = header["minnum"]
             self.Header.NEXTNUM     = header["minnum"] + 1
             self.Header.insert()
-            self.Header.select().where(self.Header.SEQUENCEID == header["seqId"] and self.Header.NAMEALIAS == header["name"])
+            #self.Header.select().where(self.Header.SEQUENCEID == header["seqId"] and self.Header.NAMEALIAS == header["name"]).execute()
 
             for each in lines:
                 self.Lines.REFRECID  = self.Header.RECID.value
@@ -149,19 +149,38 @@ class NumberSequenceController:
         """
         try:
             self.Header.select().where(self.Header.RECID == reference).join(self.Lines, 'INNER').on(self.Header.RECID == self.Lines.REFRECID)
-            if self.Header.rowcount() == 0 or self.Lines.rowcount() == 0:
+            if not self.Header.records or not self.Lines.records:
                 return {"status": False, "message": "No sequence found"}
             
-            return {"status": True, "message": ""}
+            return {"status": True, "message": "update made suscessfully"}
         except Exception as e:
             print("erro: ", e)
             return {"status": False, "message": f"Unable to update due to: {e}"}
 
-    def deleteNumberSequence(self):
+    def deleteNumberSequence(self, reference:int):
         """
             Função para excluir a sequencia numerica 
+
+            :param reference: A referencia da sequencia que será removida do banco de dados
+            :type reference: int
         """
-        print("placeholder")
+        if reference == 0 or not reference:
+            return {"status": False, "message": "invalid reference"}
+        
+        try:
+            self.Header.select().where(self.Header.RECID == reference).join(self.Lines, 'INNER').on(self.Header.RECID == self.Lines.REFRECID)
+            if not self.Header.records or not self.Lines.records:
+                return{"status": False, "message": "no sequence found"}
+            
+            for each in self.Lines.records:
+                self.Lines.set_current(each)
+                self.Lines.delete()
+
+            self.Header.delete()
+            return {"status": True, "message": "sequence deleted from database"}
+        except Exception as e:
+            print("erro: ", e)
+            return {"status": False, "message": f"Unable to delete due to: {e}"}
 
     def resetNumberSequence(self):
         """
