@@ -44,9 +44,11 @@ else:
 # //=== UTILS ===//
 
 if TYPE_CHECKING:
-    from ._utils import utils
+    from ._utils import utils as utilitys
 
-if(utils := None) is not None:
+utils = utilitys()
+
+if utils is not None:
     utils._clear_init_files_pre_import()
 
 # //=== CONFIG ===//    

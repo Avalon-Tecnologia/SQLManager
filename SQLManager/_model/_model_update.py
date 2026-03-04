@@ -131,7 +131,7 @@ class ModelUpdater:
                 print("Cancelado.")
                 return
 
-        try:
+        try:            
             utils.stepInfo("00", "Limpando arquivos __init__.py")
             self._clear_init_files()
 

@@ -4,9 +4,6 @@ from typing import TYPE_CHECKING
 
 from .. import *
 
-if TYPE_CHECKING:
-    from .. import ModelUpdater
-
 class EDT_Manager:
     '''Gerenciamento de EDTs'''
     
