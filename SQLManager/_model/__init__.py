@@ -43,10 +43,9 @@ else:
 
 # //=== UTILS ===//
 
-if TYPE_CHECKING:
-    from ._utils import utils as utilitys
+from ._utils import utils as utils_class
 
-utils = utilitys()
+utils = utils_class()
 
 if utils is not None:
     utils._clear_init_files_pre_import()
