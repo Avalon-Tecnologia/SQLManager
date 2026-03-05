@@ -4,13 +4,10 @@ from typing import TYPE_CHECKING
 
 from .. import *
 
-if TYPE_CHECKING:
-    from .. import ModelUpdater
-
 class Enum_Manager:
     '''Gerenciamento de Enums'''
 
-    def _scan_existing_enums(_model: ModelUpdater, _ShowEnums: bool = False):
+    def _scan_existing_enums(_model, _ShowEnums: bool = False):
         '''Escaneia Enums existentes no diretório'''
         import re
         
@@ -37,7 +34,7 @@ class Enum_Manager:
             for enum in _model.available_enums.values():
                 print(f" - {SystemController().custom_text(enum, 'green', is_bold=True)}")
 
-    def _update_enums_init(_model: ModelUpdater):
+    def _update_enums_init(_model):
         '''Atualiza __init__.py dos Enums'''
         init_file = _model.enums_path / "__init__.py"
                 

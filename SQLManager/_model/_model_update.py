@@ -12,6 +12,16 @@ from . import *
 class ModelUpdater:
     '''Atualização automática de modelos'''
 
+    @staticmethod
+    def _get_values(obj):
+        '''Retorna valores de dict ou lista de forma compatível'''
+        if isinstance(obj, dict):
+            return obj.values()
+        elif isinstance(obj, list):
+            return obj
+        else:
+            return obj
+
     def ensurer(self, ref_Path: Path, content: str):
         '''Garante que arquivo exista com conteúdo específico'''
         if not ref_Path.exists():
@@ -131,7 +141,7 @@ class ModelUpdater:
                 print("Cancelado.")
                 return
 
-        try:
+        try:            
             utils.stepInfo("00", "Limpando arquivos __init__.py")
             self._clear_init_files()
 
@@ -139,15 +149,15 @@ class ModelUpdater:
             self._generate_model_init()
 
             utils.stepInfo("00.1", "Garantindo Enums obrigatórios")
-            for enum in enums.values():
+            for enum in self._get_values(enums):
                 self.ensurer(self.enums_path, enum)
 
             utils.stepInfo("00.2", "Garantindo EDTs obrigatórios")
-            for edt in EDTs.values():
+            for edt in self._get_values(EDTs):
                 self.ensurer(self.edts_path, edt)
 
             utils.stepInfo("00.3", "Garantindo Tables obrigatórios")
-            for table in tables.values():
+            for table in self._get_values(tables):
                 self.ensurer(self.tables_path, table)
 
             utils.stepInfo("01.1", "Escaneando EDTs existentes")

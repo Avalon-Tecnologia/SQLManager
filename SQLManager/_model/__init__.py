@@ -43,10 +43,11 @@ else:
 
 # //=== UTILS ===//
 
-if TYPE_CHECKING:
-    from ._utils import utils
+from ._utils import utils as utils_class
 
-if(utils := None) is not None:
+utils = utils_class()
+
+if utils is not None:
     utils._clear_init_files_pre_import()
 
 # //=== CONFIG ===//    
@@ -85,14 +86,14 @@ init_files = [
 ]
 
 # //=== IMPORTS ===//
-from .generators import *
-from .managers   import *
+from .generators import EDTs, enums, tables
+from .managers   import View_Manager, Table_Manager, Enum_Manager, EDT_Manager
 
 
 __all__ = ["utils","CoreConfig","database_connection",
            "SystemController","sys",'os','dotenv','Path',
            'ROOT_DIR','src_dir', 'init_files', 'model_path',
-           "EDTs", "enums", "tables"
+           "EDTs", "enums", "tables",
            "View_Manager", "Table_Manager", "Enum_Manager", "EDT_Manager"]
 
 ''' [END CODE] Project: SQLManager Version 4.0 / issue: #6 / made by: Nicolas Santos / created: 26/02/2026 '''

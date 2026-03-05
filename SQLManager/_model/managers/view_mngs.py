@@ -4,13 +4,10 @@ from typing import TYPE_CHECKING
 
 from .. import *
 
-if TYPE_CHECKING:
-    from .. import ModelUpdater
-
 class View_Manager:
     '''Gerenciamento de Views'''
     
-    def _scan_existing_views(_model: ModelUpdater, _ShowViews: bool = False):
+    def _scan_existing_views(_model, _ShowViews: bool = False):
         '''Escaneia Views existentes no diretório'''
         import re
         
@@ -37,7 +34,7 @@ class View_Manager:
             for view in _model.available_views.keys():
                 print(f" - {view}")
 
-    def _update_views(_model: ModelUpdater):
+    def _update_views(_model):
         '''Atualiza Views baseadas no banco de dados'''        
         query = """
             SELECT TABLE_NAME 
@@ -83,7 +80,7 @@ class View_Manager:
         
         View_Manager._scan_existing_views(_model, _ShowViews=True)
 
-    def _update_views_init(_model: ModelUpdater):
+    def _update_views_init(_model):
         '''Atualiza __init__.py de views'''
         init_file = _model.views_path / "__init__.py"
                 
@@ -105,7 +102,7 @@ class View_Manager:
         
         print(f"Pacote de Views atualizado: {init_file}")
 
-    def _update_single_view(_model: ModelUpdater, view_name: str):
+    def _update_single_view(_model, view_name: str):
         '''
         Atualiza/Cria view específica
         Returns: Dict com erro ou None se sucesso
@@ -154,7 +151,7 @@ class View_Manager:
         except Exception as e:
             return {'view': view_name, 'reason': f'Erro ao gerar código: {str(e)}'}
     
-    def _update_existing_view(_model: ModelUpdater, view_name: str, columns, view_file: Path) -> str:
+    def _update_existing_view(_model, view_name: str, columns, view_file: Path) -> str:
         '''Atualiza view existente preservando métodos customizados'''
         import re
         
@@ -236,7 +233,7 @@ class View_Manager:
         lines.append("        db_controller: Banco de dados ou transação")
         lines.append("    '''")
         lines.append("    def __init__(self, db):")
-        lines.append(f"        super().__init__(db=db, view_name=\"{view_name}\")")
+        lines.append(f"        super().__init__(db=db, source_name=\"{view_name}\")")
         lines.append("    ")
         
         for col in columns:
@@ -252,7 +249,7 @@ class View_Manager:
         
         return "\n".join(lines)
     
-    def _generate_View_class(_model: ModelUpdater, view_name: str, columns) -> str:
+    def _generate_View_class(_model, view_name: str, columns) -> str:
         '''Gera código Python para classe de view'''
         lines = []
                 
@@ -268,7 +265,7 @@ class View_Manager:
         lines.append("        db_controller: Banco de dados ou transação")
         lines.append("    '''")
         lines.append("    def __init__(self, db):")
-        lines.append(f"        super().__init__(db=db, view_name=\"{view_name}\")")
+        lines.append(f"        super().__init__(db=db, source_name=\"{view_name}\")")
         lines.append("    ")
                 
         for col in columns:
@@ -283,7 +280,7 @@ class View_Manager:
         
         return "\n".join(lines)
         
-    def _detect_field_type(_model: ModelUpdater, field_name: str, sql_type: str, max_length) -> str:
+    def _detect_field_type(_model, field_name: str, sql_type: str, max_length) -> str:
         '''Detecta tipo de campo apropriado (EDT, Enum ou padrão)'''
                 
         if field_name in _model.available_edts:

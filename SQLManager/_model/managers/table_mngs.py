@@ -4,13 +4,10 @@ from typing import TYPE_CHECKING
 
 from .. import *
 
-if TYPE_CHECKING:
-    from .. import ModelUpdater
-
 class Table_Manager:
     '''Gerenciamento de Tables'''
     
-    def _scan_existing_tables(_model: ModelUpdater, _ShowTables: bool = False):
+    def _scan_existing_tables(_model, _ShowTables: bool = False):
         '''Escaneia Tables existentes no diretório'''
         import re
         
@@ -37,7 +34,7 @@ class Table_Manager:
             for table in _model.available_tables.keys():
                 print(f" - {table}")
 
-    def _update_tables(_model: ModelUpdater):
+    def _update_tables(_model):
         '''Atualiza Tables baseadas no banco de dados'''        
         query = """
             SELECT TABLE_NAME 
@@ -84,7 +81,7 @@ class Table_Manager:
         
         Table_Manager._scan_existing_tables(_model, _ShowTables=True)
 
-    def _update_tables_init(_model: ModelUpdater):
+    def _update_tables_init(_model):
         '''Atualiza __init__.py de tables'''
         init_file = _model.tables_path / "__init__.py"
                 
@@ -106,7 +103,7 @@ class Table_Manager:
         
         print(f"Pacote de Tables atualizado: {init_file}")
 
-    def _update_single_table(_model: ModelUpdater, table_name: str):
+    def _update_single_table(_model, table_name: str):
         '''
         Atualiza/Cria tabela específica
         Returns: Dict com erro ou None se sucesso
@@ -152,7 +149,7 @@ class Table_Manager:
         except Exception as e:
             return {'table': table_name, 'reason': f'Erro ao gerar código: {str(e)}'}
     
-    def _update_existing_table(_model: ModelUpdater, table_name: str, columns, table_file: Path) -> str:
+    def _update_existing_table(_model, table_name: str, columns, table_file: Path) -> str:
         '''Atualiza tabela existente preservando métodos customizados'''
         import re
         
@@ -234,7 +231,7 @@ class Table_Manager:
         lines.append("        db_controller: Banco de dados ou transação")
         lines.append("    '''")
         lines.append("    def __init__(self, db):")
-        lines.append(f"        super().__init__(db=db, table_name=\"{table_name}\")")
+        lines.append(f"        super().__init__(db=db, source_name=\"{table_name}\")")
         lines.append("    ")
         
         for col in columns:
@@ -250,7 +247,7 @@ class Table_Manager:
         
         return "\n".join(lines)
     
-    def _generate_table_class(_model: ModelUpdater, table_name: str, columns) -> str:
+    def _generate_table_class(_model, table_name: str, columns) -> str:
         '''Gera código Python para classe de tabela'''
         lines = []
                 
@@ -266,7 +263,7 @@ class Table_Manager:
         lines.append("        db_controller: Banco de dados ou transação")
         lines.append("    '''")
         lines.append("    def __init__(self, db):")
-        lines.append(f"        super().__init__(db=db, table_name=\"{table_name}\")")
+        lines.append(f"        super().__init__(db=db, source_name=\"{table_name}\")")
         lines.append("    ")
                 
         for col in columns:
@@ -281,7 +278,7 @@ class Table_Manager:
         
         return "\n".join(lines)
         
-    def _detect_field_type(_model: ModelUpdater, field_name: str, sql_type: str, max_length) -> str:
+    def _detect_field_type(_model, field_name: str, sql_type: str, max_length) -> str:
         '''Detecta tipo de campo apropriado (EDT, Enum ou padrão)'''
                 
         if field_name in _model.available_edts:

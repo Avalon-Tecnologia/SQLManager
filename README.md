@@ -39,10 +39,10 @@ Sistema reutilizável para gerenciamento de conexões de banco de dados, valida�
 ### Como Repositório Externo
 
 ```bash
-pip install git+https://github.com/nickzsd/SQLManager.git
+pip install git+https://github.com/nicozsd/SQLManager.git
 
 # Ou adicione ao requirements.txt
-git+https://github.com/nickzsd/SQLManager.git
+git+https://github.com/nicozsd/SQLManager.git
 ```
 
 > **ATENÇÃO:** O `pip install` executa automaticamente o gerador de modelos durante a instalação. Certifique-se de que:
@@ -111,7 +111,7 @@ from SQLManager.controller import EDTController, TableController, ViewController
 Para atualizar para a versão mais recente, execute:
 
 ```bash
-pip install --upgrade --force-reinstall git+https://github.com/nickzsd/SQLManager.git
+pip install --upgrade --force-reinstall git+https://github.com/nicozsd/SQLManager.git
 ```
 
 ---
@@ -121,16 +121,16 @@ pip install --upgrade --force-reinstall git+https://github.com/nickzsd/SQLManage
 ### Issues 
 
 #### Remodelagem do tableController
-> Issue: [#1-TableController Remodel](https://github.com/nickzsd/SQLManager/issues/1)  
+> Issue: [#1-TableController Remodel](https://github.com/nicozsd/SQLManager/issues/1)  
 > Solution [Development document](SQLManager/documents/Issues/Issue1_Note.md)
 
-> Issue: [#3-AutoRoutes](https://github.com/nickzsd/SQLManager/issues/3)  
+> Issue: [#3-AutoRoutes](https://github.com/nicozsd/SQLManager/issues/3)  
 > Solution [Development document](SQLManager/documents/Issues/Issue3_Note.md)
 
-> Issue: [#4-ViewController](https://github.com/nickzsd/SQLManager/issues/4)  
+> Issue: [#4-ViewController](https://github.com/nicozsd/SQLManager/issues/4)  
 > Solution [Development document](SQLManager/documents/Issues/Issue4_Note.md)
 
-> Issue: [#6-UpdateModel](https://github.com/nickzsd/SQLManager/issues/6)  
+> Issue: [#6-UpdateModel](https://github.com/nicozsd/SQLManager/issues/6)  
 > Solution [Development document](SQLManager/documents/Issues/Issue6_Note.md)
 
 ### Versão 4.0.0 (27/02/2026)
@@ -857,7 +857,7 @@ products_view.select()\
 MeuProjeto/
 │
 ├── .env                   # Suas variáveis de ambiente
-├── requirements.txt       # git+https://github.com/nickzsd/SQLManager
+├── requirements.txt       # git+https://github.com/nicozsd/SQLManager
 ├── app.py                 # Configurar CoreConfig aqui
 │
 ├── src/

@@ -4,13 +4,10 @@ from typing import TYPE_CHECKING
 
 from .. import *
 
-if TYPE_CHECKING:
-    from .. import ModelUpdater
-
 class EDT_Manager:
     '''Gerenciamento de EDTs'''
     
-    def _scan_existing_edts(_model: ModelUpdater, _ShowEDTs: bool = False):
+    def _scan_existing_edts(_model, _ShowEDTs: bool = False):
         '''Escaneia EDTs existentes no diretório'''
         import re
         
@@ -37,7 +34,7 @@ class EDT_Manager:
             for edt in _model.available_edts.values():
                 print(f" - {SystemController().custom_text(edt, 'green', is_bold=True)}")
                 
-    def _update_edts_init(_model: ModelUpdater):
+    def _update_edts_init(_model):
         '''Atualiza __init__.py dos EDTs'''
         init_file = _model.edts_path / "__init__.py"
                 
