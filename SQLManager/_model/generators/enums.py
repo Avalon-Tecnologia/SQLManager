@@ -45,5 +45,18 @@ class NoYes(BaseEnumController.Enum):
     No  : Self = (0, "Não")
     Yes : Self = (1, "Sim")
 ''',
+    "SequenceTypes": '''
+from typing import Self
+from SQLManager import BaseEnumController
+
+class SequenceTypes(BaseEnumController.Enum):
+    """
+    Enumeração dos tipos de cada parte da sequencia.
+    """
+    UNDEFINED       : Self = (0, "Indefinido")
+    CONSTANT        : Self = (1, "Constante")
+    SEPARATOR       : Self = (2, "Separador")
+    NUMERIC         : Self = (3, "Numeric")
+'''
 }
 ''' [END CODE] Project: SQLManager Version 4.0 / issue: #6 / made by: Nicolas Santos / created: 26/02/2026 '''

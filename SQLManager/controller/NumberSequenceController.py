@@ -1,7 +1,5 @@
 #[BEGIN CODE] Project: SQLManager / Issue #2 / made by: {Heitor Rolim} / created: {05/03/2026}
 import traceback
-from typing import Self
-from .BaseEnumController import *
 
 class NumberSequenceController:
 
@@ -9,7 +7,6 @@ class NumberSequenceController:
         self.Header     = Head
         self.Lines      = Line
         self.seqTypes   = seqTypes
-        self.limit      = 20
 
 
     def getNextNum(self, reference: int) -> str:
@@ -154,7 +151,7 @@ class NumberSequenceController:
         parts = self.Lines.records
         ret = [""] * len(parts)
         for each in parts:
-            if each["PIECETYPE"] == SequenceTypes.NUMERIC.value: 
+            if each["PIECETYPE"] == self.seqTypes.NUMERIC.value: 
                 ret[each["LINENUM"]-1] = str(number).rjust(padding, "0")
             else:
                 ret[each["LINENUM"]-1] = each["SEQPIECE"]
@@ -236,7 +233,7 @@ class NumberSequenceController:
 
             for each in lines:
                 self.Lines.REFRECID  = self.Header.RECID.value
-                if each["pieceType"] == SequenceTypes.NUMERIC.value: #TODO: colocar o ENUM pra usar de alfaNum para poder arrumar o padding
+                if each["pieceType"] == self.seqTypes.NUMERIC.value: #TODO: colocar o ENUM pra usar de alfaNum para poder arrumar o padding
                     self.Lines.PIECETYPE = each["pieceType"]
                     self.Lines.SEQPIECE  = None
                     self.Lines.LINENUM   = each["place"]
@@ -450,12 +447,4 @@ class NumberSequenceController:
             traceback.print_exc()
             return {"status": False, "message": f"Unable to delete due to: {e}"}
 
-class SequenceTypes(BaseEnumController.Enum):
-    """
-    Enumeração de status da inspeção (int/texto), com label descritivo.
-    """
-    UNDEFINED       : Self = (0, "Indefinido")
-    CONSTANT        : Self = (1, "Constante")
-    SEPARATOR       : Self = (2, "Separador")
-    NUMERIC         : Self = (3, "Numeric")
 #[END CODE] Project: SQLManager / Issue #2 / made by: {Heitor Rolim} / created: {05/03/2026}
