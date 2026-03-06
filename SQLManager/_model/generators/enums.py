@@ -1,4 +1,4 @@
-''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #6 / made by: Nicolas Santos / created: 26/02/2026 '''
+
 
 """
 Por meio deste arquivo adicionar todos os Enums (Base Enums) que são chaves do SQLManager, DataType e NoYes.
@@ -45,6 +45,7 @@ class NoYes(BaseEnumController.Enum):
     No  : Self = (0, "Não")
     Yes : Self = (1, "Sim")
 ''',
+#[BEGIN CODE] Project: SQLManager / Issue #2 / made by: {Heitor Rolim} / created: {06/03/2026}
     "SequenceTypes": '''
 from typing import Self
 from SQLManager import BaseEnumController
@@ -58,5 +59,5 @@ class SequenceTypes(BaseEnumController.Enum):
     SEPARATOR       : Self = (2, "Separador")
     NUMERIC         : Self = (3, "Numeric")
 '''
+#[END CODE] Project: SQLManager / Issue #2 / made by: {Heitor Rolim} / created: {06/03/2026}
 }
-''' [END CODE] Project: SQLManager Version 4.0 / issue: #6 / made by: Nicolas Santos / created: 26/02/2026 '''

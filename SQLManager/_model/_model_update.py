@@ -22,6 +22,25 @@ class ModelUpdater:
         else:
             return obj
 
+    def ensurer_database(self, name:str, content:str):
+        """Garante a criação de uma nova tabela no banco de dados caso não exista"""
+        if not name:
+            return
+        query = """
+            SELECT TABLE_NAME 
+            FROM INFORMATION_SCHEMA.TABLES 
+            WHERE TABLE_TYPE = 'BASE TABLE'
+            ORDER BY TABLE_NAME
+        """
+        
+        tables = self.db.doQuery(query)
+        db_tables = [row[0]["TABLE_NAME"] for row in tables]
+        if name not in db_tables:
+            query = f"""
+            CREATE TABLE {name} ({content})
+            """
+            self.db.doQuery(query)
+
     def ensurer(self, ref_Path: Path, content: str):
         '''Garante que arquivo exista com conteúdo específico'''
         if not ref_Path.exists():
@@ -30,7 +49,6 @@ class ModelUpdater:
             print(f"Criado: {SystemController().custom_text(ref_Path.name, 'green')}")
         else:
             print(f"Existente: {SystemController().custom_text(ref_Path.name, 'yellow')}")
-
 
     def _clear_init_files(self):
         '''Limpa arquivos __init__.py de EDTs, Enums, Tables e Views'''
@@ -157,8 +175,8 @@ class ModelUpdater:
                 self.ensurer(self.edts_path, edt)
 
             utils.stepInfo("00.3", "Garantindo Tables obrigatórios")
-            for table in self._get_values(tables):
-                self.ensurer(self.tables_path, table)
+            for table in tables:
+                self.ensurer_database(table, tables[table])
 
             utils.stepInfo("01.1", "Escaneando EDTs existentes")
             EDT_Manager._scan_existing_edts(self, _ShowEDTs=True)

@@ -40,9 +40,53 @@ class NumberSequenceLines(TableController):
         self.LINENUM = EDTController("onlyNumbers", DataType.Number)
 
 
+def ensurer_database(name, content, trs):
+        """Garante a criação de uma nova tabela no banco de dados"""
+        if not name:
+            return
+        query = """
+            SELECT TABLE_NAME 
+            FROM INFORMATION_SCHEMA.TABLES 
+            WHERE TABLE_TYPE = 'BASE TABLE'
+            ORDER BY TABLE_NAME
+        """
+        
+        tables = trs.doQuery(query)
+        db_tables = [row[0] for row in tables]
+        if name not in db_tables:
+            query = f"""
+                CREATE TABLE {name} (
+                    {content}
+                )
+            """
+            trs.doQuery(content)
+
+Ensures = {
+    "NumberSequenceTable": '''
+    [RECID] [bigint] IDENTITY(1,1) NOT NULL,
+    [SEQUENCEID] [nvarchar](10) NOT NULL,
+    [NAMEALIAS] [nvarchar](100) NOT NULL,
+    [DESCRIPTION] [nvarchar](200) NOT NULL,
+    [ISDISABLE] [bit] NOT NULL DEFAULT 0,
+    [PREVNUM] [int] NULL,
+    [CURNUM] [int] NULL,
+    [NEXTNUM] [int] NULL,
+    [MINNUM] [int] NOT NULL DEFAULT 1,
+    [MAXNUM] [int] NOT NULL DEFAULT 9999 CHECK([MAXNUM]>=(0) AND [MAXNUM]<=(99999999)),
+    [CREATEDATETIME] [datetime] NOT NULL DEFAULT SYSDATETIME(),
+''',
+    "NumberSequenceLine": '''
+    [RECID] [bigint] IDENTITY(1,1) NOT NULL,
+    [REFRECID] [bigint] NOT NULL,
+    [PIECETYPE] [int] NULL,
+    [SEQPIECE] [nvarchar](5) NULL,
+    [LINENUM] [int] NULL,
+'''
+}
+
 with database.transaction() as trs:
-    numSeq = NumberSequenceController(NumberSequenceTable(trs), NumberSequenceLines(trs))
     """
+    numSeq = NumberSequenceController(NumberSequenceTable(trs), NumberSequenceLines(trs))
     res = numSeq.createNumberSequence(
         header={"seqId": "TESTE123",
                 "name": "TESTE_TESTE",
@@ -57,8 +101,11 @@ with database.transaction() as trs:
             {"pieceType": 3, "piece": "",       "place": 3},
         ]
     )
-    """
     res = numSeq.getNextNum(2)
+    """
+    for table in Ensures:
+        ensurer_database(table, Ensures[table], trs)
+
     
 
 #[END CODE] Project: SQLManager / Issue #2 / made by: {Heitor Rolim} / created: {03/03/2026}
