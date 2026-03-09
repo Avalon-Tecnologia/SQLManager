@@ -120,7 +120,13 @@ class SelectManager:
         self._distinct:          bool                                               = False
         self._do_update:         bool                                               = True
         self._executed                                                              = False
-        self._last_results                                                          = []        
+        self._last_results                                                          = []
+        
+        ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #5 / made by: Nicolas Santos / created: 09/03/2026 '''
+        # Suporte a Relations automáticas
+        self._include_relations: List[str]                                          = []  # Nomes das relations a incluir
+        self._relation_joins:    Dict[str, Any]                                     = {}  # Mapa de relation -> join info
+        ''' [END CODE] Project: SQLManager Version 4.0 / issue: #5 / made by: Nicolas Santos / created: 09/03/2026 '''        
 
     ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
 
@@ -209,6 +215,26 @@ class SelectManager:
         self._distinct = True
         return self
     
+    ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #5 / made by: Nicolas Santos / created: 09/03/2026 '''
+    def with_relations(self, *relation_names: str) -> 'SelectManager':
+        '''
+        Inclui relations automáticas no SELECT via JOIN.
+        Os records das relations serão automaticamente populados.
+        
+        Args:
+            *relation_names: Nomes das relations definidas em self._controller.relations
+            
+        Exemplo:
+            table.select().with_relations("mensalities", "details").where(table.ID == 5)
+            # Após: table.relations["mensalities"].records estará populado
+        
+        Returns:
+            SelectManager: Self para encadeamento
+        '''
+        self._include_relations = list(relation_names)
+        return self
+    ''' [END CODE] Project: SQLManager Version 4.0 / issue: #5 / made by: Nicolas Santos / created: 09/03/2026 '''
+    
     def do_update(self, update: bool = True) -> 'SelectManager':
         '''Define se deve atualizar a instância com o resultado'''
         self._do_update = update
@@ -260,7 +286,59 @@ class SelectManager:
                     select_columns.append(f"{main_alias}.{col} AS {main_alias}_{col}")                
 
         join_clauses     = []
-        join_controllers = []        
+        join_controllers = []
+        values           = []  # Inicializa antes de processar relations
+        
+        ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #5 / made by: Nicolas Santos / created: 09/03/2026 '''
+        # Processa Relations automáticas primeiro
+        if self._include_relations and hasattr(self._controller, 'relations'):
+            for rel_name in self._include_relations:
+                if rel_name not in self._controller.relations:
+                    raise ValueError(f"Relation '{rel_name}' não encontrada em {self._controller.source_name}")
+                
+                relation = self._controller.relations[rel_name]
+                
+                # Verifica se a relação foi configurada (usa 'is None' pois EDT pode ser falsy)
+                if relation.source_field is None or relation.target_field is None:
+                    raise ValueError(f"Relation '{rel_name}' não configurada. Use .on(source, target)")
+                
+                # Obtém a instância da tabela relacionada
+                related_table = relation.get_instance()
+                
+                # Constrói a condição de JOIN
+                join_condition = relation.build_join_condition()
+                
+                # Adiciona às condições WHERE se a relation tem filtros
+                if relation.where_condition:
+                    # Combina com AND
+                    if self._where_conditions:
+                        self._where_conditions = self._where_conditions & relation.where_condition
+                    else:
+                        self._where_conditions = relation.where_condition
+                
+                # Registra o relacionamento para processamento posterior
+                self._relation_joins[rel_name] = {
+                    'relation': relation,
+                    'controller': related_table,
+                    'join_index': len(join_controllers)
+                }
+                
+                # Adiciona ao join normal (será processado como antes)
+                related_columns = related_table.get_table_columns()
+                related_alias   = related_table.source_name
+                
+                # Monta SELECT das colunas da tabela relacionada
+                for col in related_columns:
+                    select_columns.append(f"{related_alias}.{col[0]} AS {related_alias}_{col[0]}")
+                
+                # Constrói SQL do JOIN
+                where_sql, where_values = join_condition.to_sql()
+                values.extend(where_values)
+                
+                join_clause = f" {relation.join_type} JOIN {related_table.source_name} AS {related_alias} ON {where_sql}"
+                join_clauses.append(join_clause)
+                join_controllers.append((related_table, related_alias))
+        ''' [END CODE] Project: SQLManager Version 4.0 / issue: #5 / made by: Nicolas Santos / created: 09/03/2026 '''        
 
         for join in self._joins:
             ctrl       = join['controller']
@@ -287,8 +365,6 @@ class SelectManager:
         ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
         query = f"SELECT {distinct_keyword}{', '.join(select_columns)} FROM {self._controller.source_name} AS {main_alias}" + ''.join(join_clauses)
         ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
-
-        values = []        
         
         if self._where_conditions or self._where_conditions is not None:
             where_sql, where_values = self._where_conditions.to_sql()
@@ -332,7 +408,7 @@ class SelectManager:
         if has_aggregates or self._group_by or self._group_by is not None:
             results = self._process_aggregate_results(rows, columns, table_columns)
             join_records_map = None
-        elif self._joins:
+        elif self._joins or self._include_relations:
             ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 26/02/2026 '''
             results, join_records_map = self._process_join_results(rows, table_columns, join_controllers)
             ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 26/02/2026 '''
@@ -341,11 +417,11 @@ class SelectManager:
             join_records_map = None
         
         # SEMPRE armazena results no SelectManager para que exists() possa acessar
-        self._last_results = results        
-        
+        self._last_results = results                        
+
         if self._do_update:
             if results:
-                if self._joins:
+                if self._joins or self._include_relations:
                     ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 26/02/2026 '''                    
                     self._controller.records = [r[0] for r in results]
                     
@@ -356,6 +432,17 @@ class SelectManager:
 
                         if join_ctrl.records:
                             join_ctrl.set_current(join_ctrl.records[0])
+                    
+                    ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #5 / made by: Nicolas Santos / created: 09/03/2026 '''
+                    # Popula as Relations automáticas
+                    for rel_name, rel_info in self._relation_joins.items():
+                        relation    = rel_info['relation']
+                        join_idx    = rel_info['join_index']
+                        rel_records = join_records_map[join_idx]
+                        
+                        # Popula os records na relation
+                        relation.set_records(rel_records)
+                    ''' [END CODE] Project: SQLManager Version 4.0 / issue: #5 / made by: Nicolas Santos / created: 09/03/2026 '''
                                         
                     if self._controller.records:
                         self._controller.set_current(self._controller.records[0])
@@ -367,11 +454,18 @@ class SelectManager:
             else:                
                 self._controller.clear()
                 self._controller.records = []                
-                if self._joins:
+                if self._joins or self._include_relations:
                     for join_info in self._joins:
                         join_ctrl = join_info['controller']
                         join_ctrl.clear()
                         join_ctrl.records = []
+                    
+                    ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #5 / made by: Nicolas Santos / created: 09/03/2026 '''
+                    # Limpa as Relations automáticas
+                    for rel_name, rel_info in self._relation_joins.items():
+                        relation = rel_info['relation']
+                        relation.clear()
+                    ''' [END CODE] Project: SQLManager Version 4.0 / issue: #5 / made by: Nicolas Santos / created: 09/03/2026 '''
         else:            
             self._controller.records = results
                 

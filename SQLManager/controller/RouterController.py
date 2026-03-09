@@ -409,15 +409,29 @@ class AutoRouter:
             return {"status": 500, "error": f"Internal Server Error: {str(e)}"}
     ''' [END CODE] Project: SQLManager Version 4.0 / issue: #3 / made by: Nicolas Santos / created: 27/02/2026 '''
 
+    ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
+    def _get_relation_names(self, table: TableController) -> List[str]:
+        """Retorna lista de nomes de relations se a tabela tiver relations definidas"""
+        if hasattr(table, 'relations') and table.relations:
+            return list(table.relations.keys())
+        return []
+        
     def _handle_get(self, table: TableController, path_parts: List[str], params: Dict, config: Dict):        
         try:
-            field_map = self._get_field_map()            
+            field_map = self._get_field_map()
+            relation_names = self._get_relation_names(table)
 
             # Rota: GET /{table}/{id}
             if path_parts and path_parts[0].isdigit():                                
                 recid = int(path_parts[0])
                 if table.exists(table.RECID == recid):
-                    table.select().where(table.RECID == recid).execute()
+                    select_query = table.select().where(table.RECID == recid)
+                    
+                    # Adiciona relations automaticamente se houver
+                    if relation_names:
+                        select_query.with_relations(*relation_names)
+                    
+                    select_query.execute()
 
                     if table.records:
                         return {"status": 200, "data": self._serialize(table.records[0], field_map)}
@@ -438,10 +452,17 @@ class AutoRouter:
                     try:
                         condition = self._evaluate_condition(route.get('where', '1==1'))
 
+                        select_query = table.select().where(condition)
+                        
                         if 'columns' in route:
                             cols = [getattr(table, c) for c in route['columns'] if hasattr(table, c)]
-
-                        table.select().where(condition).columns(cols)                                                
+                            select_query.columns(cols)
+                        
+                        # Adiciona relations automaticamente se houver
+                        if relation_names:
+                            select_query.with_relations(*relation_names)
+                        
+                        select_query.execute()
 
                         data = [self._serialize(r, field_map) for r in table.records]
                         return {"status": 200, "data": data, "meta": {"count": len(data)}}                    
@@ -479,24 +500,39 @@ class AutoRouter:
             if real_field_name:
                 field_attr = table.field(real_field_name)
                 
-                # Aplica filtro
+                # Cria select base
+                select_query = table.select().where(field_attr == value).limit(limit).offset(offset)
+                
+                # Aplica operador específico
                 match operator:
                     #equal / igual
-                    case 'eq':   table.select().where(field_attr == value).limit(limit).offset(offset).execute()
+                    case 'eq':   select_query = table.select().where(field_attr == value).limit(limit).offset(offset)
                     #greater than / maior que
-                    case 'gt':   table.select().where(field_attr > value).limit(limit).offset(offset).execute()
+                    case 'gt':   select_query = table.select().where(field_attr > value).limit(limit).offset(offset)
                     #greater than or equal / maior ou igual
-                    case 'gte':  table.select().where(field_attr >= value).limit(limit).offset(offset).execute()
+                    case 'gte':  select_query = table.select().where(field_attr >= value).limit(limit).offset(offset)
                     #less than / menor que
-                    case 'lt':   table.select().where(field_attr < value).limit(limit).offset(offset).execute()
+                    case 'lt':   select_query = table.select().where(field_attr < value).limit(limit).offset(offset)
                     #less than or equal / menor ou igual
-                    case 'lte':  table.select().where(field_attr <= value).limit(limit).offset(offset).execute()
+                    case 'lte':  select_query = table.select().where(field_attr <= value).limit(limit).offset(offset)
                     #not equal / diferente
-                    case 'neq':  table.select().where(field_attr != value).limit(limit).offset(offset).execute()
+                    case 'neq':  select_query = table.select().where(field_attr != value).limit(limit).offset(offset)
                     # like / similar a (usa SQL LIKE, suporta % e _)
-                    case 'like': table.select().where(field_attr.like(str(value))).limit(limit).offset(offset).execute()        
+                    case 'like': select_query = table.select().where(field_attr.like(str(value))).limit(limit).offset(offset)
+                
+                # Adiciona relations automaticamente se houver
+                if relation_names:
+                    select_query.with_relations(*relation_names)
+                
+                select_query.execute()
         else:
-            table.select().limit(limit).offset(offset).execute()
+            select_query = table.select().limit(limit).offset(offset)
+            
+            # Adiciona relations automaticamente se houver
+            if relation_names:
+                select_query.with_relations(*relation_names)
+            
+            select_query.execute()
 
         data = [self._serialize(r, field_map) for r in table.records]
         
@@ -505,6 +541,8 @@ class AutoRouter:
             "data": data,
             "meta": {"page": page, "limit": limit, "count": len(data)}
         }
+    ''' [END CODE] Project: SQLManager Version 4.0 / issue: #5 / made by: Nicolas Santos / created: 09/03/2026 '''
+    
 
     def _handle_post(self, table: TableController, body: Dict):
         field_map = self._get_field_map()
@@ -588,9 +626,12 @@ class AutoRouter:
         except Exception as e:
             return {"status": 500, "error": str(e)}
 
+    ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #5 / made by: Nicolas Santos / created: 09/03/2026 '''
     def _serialize(self, record_obj, field_map: Dict[str, str]) -> Dict:
-        """Serializa uma instância de TableController para dict usando mapa de campos"""
-
+        """
+        Serializa uma instância de TableController para dict usando mapa de campos.
+        Inclui automaticamente relations se houver.
+        """
         if isinstance(record_obj, dict):
             return record_obj
             
@@ -603,7 +644,56 @@ class AutoRouter:
                 data[real_name] = val
             except:
                 pass
+        
+        # Serializa relations automaticamente se houver
+        if hasattr(self.current_table, 'relations') and self.current_table.relations:
+            relations_data = {}
+            for rel_name, relation_manager in self.current_table.relations.items():
+                # Pega os records da relation
+                if hasattr(relation_manager, 'records') and relation_manager.records:
+                    # Pega o field_map da tabela relacionada
+                    rel_instance = relation_manager.get_instance()
+                    rel_field_map = {}
+                    
+                    ignore = {
+                        'db', 'source_name', 'table_name', 'records', 'Columns', 'Indexes', 'ForeignKeys', 
+                        'isUpdate', 'controller', 'select', 'insert', 'update', 'delete',
+                        'insert_recordset', 'update_recordset', 'delete_from', 'field',
+                        'exists', 'validate_fields', 'validate_write', 'clear', 'set_current',
+                        'get_table_columns', 'get_table_index', 'get_table_foreign_keys', 'get_table_total',
+                        'SelectForUpdate', 'get_columns_with_defaults', 'relations'
+                    }
+                    
+                    for attr, val in rel_instance.__dict__.items():
+                        if attr not in ignore and not attr.startswith('_') and not callable(val):
+                            rel_field_map[attr.upper()] = attr
+                    
+                    # Serializa todos os records da relation
+                    relations_data[rel_name] = [
+                        self._serialize_simple(rec, rel_field_map) 
+                        for rec in relation_manager.records
+                    ]
+            
+            if relations_data:
+                data['relations'] = relations_data
+        
         return data
+    
+    def _serialize_simple(self, record_obj, field_map: Dict[str, str]) -> Dict:
+        """Serializa um record simples sem processar relations recursivamente"""
+        if isinstance(record_obj, dict):
+            return record_obj
+            
+        data = {}
+        for real_name in field_map.values():
+            try:
+                val = getattr(record_obj, real_name)
+                if callable(val): continue
+                data[real_name] = val
+            except:
+                pass
+        return data
+    ''' [END CODE] Project: SQLManager Version 4.0 / issue: #5 / made by: Nicolas Santos / created: 09/03/2026 '''
 
     def _discover_tables(self) -> List[str]:
         """

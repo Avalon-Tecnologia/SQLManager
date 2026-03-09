@@ -30,6 +30,7 @@ Sistema reutilizável para gerenciamento de conexões de banco de dados, valida�
 - **Type Safety:** Validações de tipo e formato em runtime
 - **Model Generator:** Sistema automático de geração de modelos baseado no banco de dados
 - **AutoRouter:** Geração automática de endpoints RESTful para CRUD
+- **Relations System:** Relacionamentos automáticos entre tabelas com auto-população via JOIN ([Issue #5](https://github.com/nickzsd/SQLManager/issues/5))
 - Suporte a Tables e Views: Controllers para tabelas (CRUD completo) e views (leitura)
 
 ---
@@ -130,10 +131,20 @@ pip install --upgrade --force-reinstall git+https://github.com/nicozsd/SQLManage
 > Issue: [#4-ViewController](https://github.com/nicozsd/SQLManager/issues/4)  
 > Solution [Development document](SQLManager/documents/Issues/Issue4_Note.md)
 
+> Issue: [#5-Relation System](https://github.com/nickzsd/SQLManager/issues/5)  
+> Solution [Development document](SQLManager/documents/Issues/Issue5_Note.md)
+
 > Issue: [#6-UpdateModel](https://github.com/nicozsd/SQLManager/issues/6)  
 > Solution [Development document](SQLManager/documents/Issues/Issue6_Note.md)
 
 ### Versão 4.0.0 (27/02/2026)
+
+**Relations System - Auto-serialização no AutoRouter:**
+- ✅ Relations definidas nas tabelas são automaticamente incluídas no JSON de resposta
+- ✅ Método `with_relations()` aplicado automaticamente em todos os SELECTs do AutoRouter
+- ✅ JSON estruturado com chave `relations` aninhada
+- ✅ Suporte a múltiplas relations por tabela
+- ✅ Documentação completa no [Issue5_Note.md](SQLManager/documents/Issues/Issue5_Note.md)
 
 **AutoRouter - Refatoração do Decorator:**
 - ✅ Decorator `_pre_handle` refatorado com `inspect.signature` para mapeamento robusto de argumentos
@@ -227,6 +238,7 @@ O **AutoRouter** é um sistema de rotas automáticas que transforma suas classes
 - **Zero Boilerplate:** Crie a tabela no banco, gere os modelos, e as rotas já existem
 - **Validação Automática:** EDTs e Enums são validados antes de tocar no banco
 - **Filtros Avançados:** Suporte nativo a operadores (`_gt`, `_like`, `_lte`, etc.)
+- **Relations Automáticas:** Serializa automaticamente relations definidas nas tabelas (retorna JSON aninhado)
 - **Coleção Postman:** Geração automática de documentação para testes
 - **Decorator Robusto:** Usa `inspect.signature` para mapeamento type-safe de argumentos
 

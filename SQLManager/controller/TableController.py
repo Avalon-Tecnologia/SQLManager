@@ -5,10 +5,50 @@ from ..connection        import database_connection as data, Transaction
 from .EDTController      import EDTController
 from .BaseEnumController import BaseEnumController
 from .managers._conditions_Managers import FieldCondition, BinaryExpression
-from .managers           import SelectManager, InsertManager, UpdateManager, DeleteManager, InsertRecordsetWrapper, DeleteRecordsetManager
+
+''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #5 / made by: Nicolas Santos / created: 09/03/2026 '''
+from .managers           import SelectManager, InsertManager, UpdateManager, DeleteManager, InsertRecordsetWrapper, DeleteRecordsetManager, RelationManager
+''' [END CODE] Project: SQLManager Version 4.0 / issue: #5 / made by: Nicolas Santos / created: 09/03/2026 '''
+
 from .SystemController   import SystemController
 
-class TableController():
+# Registry global de campos por classe (para acesso via ClassName.FIELD)
+_TABLE_FIELD_REGISTRY: Dict[str, Dict[str, 'EDTController']] = {}
+
+class TableControllerMeta(type):
+    '''Metaclass para permitir acesso a campos via ClassName.FIELD'''
+    
+    def __getattr__(cls, name: str):
+        '''Permite acessar campos da classe sem criar instância'''
+        class_name = cls.__name__
+        
+        if class_name in _TABLE_FIELD_REGISTRY:
+            if name in _TABLE_FIELD_REGISTRY[class_name]:
+                return _TABLE_FIELD_REGISTRY[class_name][name]
+        
+        try:
+            class DummyDB:
+                def transaction(self):
+                    return self
+                def __enter__(self):
+                    return self
+                def __exit__(self, *args):
+                    pass
+                def doQuery(self, query, params):
+                    return []  # Retorna lista vazia para queries
+                        
+            dummy_instance = cls(DummyDB())            
+            
+            if class_name in _TABLE_FIELD_REGISTRY:                
+                if name in _TABLE_FIELD_REGISTRY[class_name]:                    
+                    return _TABLE_FIELD_REGISTRY[class_name][name]                                    
+        except Exception as e:            
+            import traceback            
+            traceback.print_exc()
+        
+        raise AttributeError(f"'{class_name}' não possui atributo '{name}'")
+
+class TableController(metaclass=TableControllerMeta):
     """
     Classe de controle de tabelas do banco de dados (SQL Server) - REFATORADA
     
@@ -64,7 +104,48 @@ class TableController():
         self.isUpdate = False
         self._pending_wrapper = None  # Rastreia wrapper pendente de execução
 
-        self.__select_manager = SelectManager(self) 
+        self.__select_manager = SelectManager(self)
+        
+        # Registra os campos da classe para acesso via ClassName.FIELD
+        self._register_class_fields() 
+
+    def _register_class_fields(self):
+        '''Registra os campos desta instância no registry de classe'''
+        class_name = self.__class__.__name__
+        
+        # Sempre cria/atualiza o registry (não apenas na primeira vez)
+        if class_name not in _TABLE_FIELD_REGISTRY:
+            _TABLE_FIELD_REGISTRY[class_name] = {}
+        
+        # Se já tem campos registrados, não precisa re-registrar
+        if _TABLE_FIELD_REGISTRY[class_name]:
+            return
+            
+        # Percorre apenas os atributos de instância (não métodos herdados)
+        for attr_name, attr in self.__dict__.items():
+            if attr_name.startswith('_'):
+                continue
+                
+            try:
+                if isinstance(attr, (EDTController, BaseEnumController)):
+                    # Cria uma cópia do campo para o registry de classe
+                    if isinstance(attr, EDTController):
+                        field_copy = EDTController(attr.type_name, attr.data_type)
+                    else:
+                        field_copy = attr.__class__()
+                    
+                    field_copy._field_name = attr_name
+                    field_copy._table_name = self.source_name
+                    field_copy._table_alias = self.source_name
+                    
+                    _TABLE_FIELD_REGISTRY[class_name][attr_name] = field_copy
+                    
+                    # Define como atributo de classe
+                    setattr(self.__class__, attr_name, field_copy)
+            except Exception as e:                
+                print(f"Erro ao registrar campo {attr_name} de {class_name}: {e}")
+                import traceback
+                traceback.print_exc()
 
     @property
     def table_name(self) -> str:
@@ -95,7 +176,8 @@ class TableController():
             'clear', 'validate_fields', 'validate_write', 'get_table_columns',
             'get_columns_with_defaults', 'get_table_index', 'get_table_foreign_keys',
             'get_table_total', 'exists', '_get_field_instance', '_is_aggregate_function',
-            '_extract_field_from_aggregate', 'SelectForUpdate'
+            '_extract_field_from_aggregate', 'SelectForUpdate', '_register_class_fields',
+            'table_name', 'new_Relation', 'relations'
         }
         
         if name in protected_attrs or name.startswith('_'):
@@ -544,4 +626,22 @@ class TableController():
         
         return self    
     
+    ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #5 / made by: Nicolas Santos / created: 09/03/2026 '''
+    def new_Relation(self, ref_table_class: type) -> RelationManager:
+        '''
+        Cria uma nova instância de RelationManager para definir relações entre tabelas.
+        
+        Args:
+            ref_table_class: Classe da tabela relacionada (não a instância)
+            
+        Exemplo:
+            self.relations = {
+                "mensalities": self.new_Relation(PlanMensalities).on(self.PLANID, PlanMensalities.PLANID)
+            }
+            
+        Returns:
+            RelationManager: Nova instância para configurar relações
+        '''
+        return RelationManager(self.db, self, ref_table_class)
+    ''' [END CODE] Project: SQLManager Version 4.0 / issue: #5 / made by: Nicolas Santos / created: 09/03/2026 '''
 ''' [END CODE] Project: SQLManager Version 4.0 / issue: #1 / made by: Nicolas Santos / created: 23/02/2026 '''
