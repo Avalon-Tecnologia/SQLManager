@@ -84,17 +84,19 @@ class TableController(metaclass=TableControllerMeta):
     _defaults_cache: Dict[str, set] = {}
     
     ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
-    def __init__(self, db: Union[data, Transaction], source_name: Optional[str] = None):
+    def __init__(self, db: Union[data, Transaction], source_name: Optional[str] = None, table_name: Optional[str] = None):
         '''
         Inicializa o controlador de tabela.
         Args:
             db (Union[data, Transaction]): Instância de conexão ou transação.
             source_name (str): Nome da tabela ou view no banco de dados.
+            table_name (str): [DEPRECATED] Use source_name. Mantido para retrocompatibilidade.
         '''
         #SelectManager.__init__(self, self)
         
         self.db          = db
-        self.source_name = (source_name or self.__class__.__name__).upper()
+        # Retrocompatibilidade: aceita table_name como fallback
+        self.source_name = (source_name or table_name or self.__class__.__name__).upper()
 
         self.records:     List[Dict[str, Any]]           = []
         self.Columns:     Optional[List[List[Any]]]      = None

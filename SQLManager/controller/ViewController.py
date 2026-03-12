@@ -15,15 +15,17 @@ class ViewController:
     '''
     _default_cache: Dict[str, set] = {}
 
-    def __init__(self, db: Union[data, Transaction], source_name: Optional[str] = None):
+    def __init__(self, db: Union[data, Transaction], source_name: Optional[str] = None, table_name: Optional[str] = None):
         '''
         Inicializa uma instância do ViewController.
         Args:
             db: Conexão com o banco de dados ou transação.
             source_name: Nome da view a ser gerenciada (opcional).
+            table_name: [DEPRECATED] Use source_name. Mantido para retrocompatibilidade.
         '''
         self.db        = db
-        self.source_name = (source_name or self.__class__.__name__).upper()
+        # Retrocompatibilidade: aceita table_name como fallback
+        self.source_name = (source_name or table_name or self.__class__.__name__).upper()
 
         self.records:     List[Dict[str, Any]]           = []
         self.Columns:     Optional[List[List[Any]]]      = None
