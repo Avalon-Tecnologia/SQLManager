@@ -12,6 +12,7 @@ Sistema reutilizável para gerenciamento de conexões de banco de dados, valida�
   - [Controllers](#controllers---controladoras)
   - [Connection](#connection---conexões)
   - [AutoRouter API](#autorouter---api-rest)
+  - [WebSocket Tempo Real](#websocket---atualizações-em-tempo-real)
 - [Uso Básico](#uso-básico)
   - [API Fluente (JOINs, CRUD)](#nova-api-fluente-v20)
   - [Transações](#transações-isoladas)
@@ -31,6 +32,7 @@ Sistema reutilizável para gerenciamento de conexões de banco de dados, valida�
 - **Model Generator:** Sistema automático de geração de modelos baseado no banco de dados
 - **AutoRouter:** Geração automática de endpoints RESTful para CRUD
 - **Relations System:** Relacionamentos automáticos entre tabelas com auto-população via JOIN ([Issue #5](https://github.com/nickzsd/SQLManager/issues/5))
+- **WebSocket Integrado:** Atualizações em tempo real automáticas para todas operações CRUD ([Issue #7](https://github.com/nicozsd/SQLManager/issues/7))
 - Suporte a Tables e Views: Controllers para tabelas (CRUD completo) e views (leitura)
 
 ---
@@ -239,6 +241,7 @@ O **AutoRouter** é um sistema de rotas automáticas que transforma suas classes
 - **Validação Automática:** EDTs e Enums são validados antes de tocar no banco
 - **Filtros Avançados:** Suporte nativo a operadores (`_gt`, `_like`, `_lte`, etc.)
 - **Relations Automáticas:** Serializa automaticamente relations definidas nas tabelas (retorna JSON aninhado)
+- **WebSocket Integrado:** Atualizações em tempo real automáticas para INSERT/UPDATE/DELETE
 - **Coleção Postman:** Geração automática de documentação para testes
 - **Decorator Robusto:** Usa `inspect.signature` para mapeamento type-safe de argumentos
 
@@ -252,6 +255,294 @@ O **AutoRouter** é um sistema de rotas automáticas que transforma suas classes
 **Documentação completa:**
 
 - [SQLManager/documents/Issues/Issue3_Note.md](SQLManager/documents/Issues/Issue3_Note.md)
+
+---
+
+### WebSocket - Atualizações em Tempo Real
+
+O SQLManager possui **WebSocket integrado e automático** que envia notificações em tempo real sempre que dados são inseridos, atualizados ou deletados via AutoRouter.
+
+#### Características
+
+- **Broadcast Automático:** Toda operação POST/PATCH/DELETE envia eventos WebSocket automaticamente
+- **Dois Modos de Notificação:**
+  - **Simples (db_notification):** Apenas ação, tabela e RECID (leve)
+  - **Completo (db_data_sync):** Inclui dados completos do registro (sincronização)
+- **Rooms por Tabela:** Clientes se inscrevem apenas nas tabelas que precisam
+- **Zero Configuração:** Funciona automaticamente ao iniciar o AutoRouter com Flask-SocketIO
+
+---
+
+#### Instalação
+
+Instale a dependência Flask-SocketIO:  
+> OBS: Ao Instalar o SQLManager ele vai tentar instalar junto so processo.
+
+```bash
+pip install flask-socketio python-socketio
+```
+
+---
+
+#### Configuração do Servidor
+
+O WebSocket é **inicializado automaticamente** pelo AutoRouter se Flask-SocketIO estiver instalado:
+
+```python
+from flask import Flask
+from flask_socketio import SocketIO
+from SQLManager import CoreConfig
+from SQLManager.connection import database_connection
+from SQLManager.controller.RouterController import AutoRouter
+
+# Configura Flask + SocketIO
+app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Configura database
+CoreConfig.configure()
+db = database_connection()
+
+# AutoRouter com WebSocket automático
+router = AutoRouter(db, app=app, socketio=socketio)
+
+# Inicia servidor
+if __name__ == '__main__':
+    socketio.run(app, debug=True, host='0.0.0.0', port=3000)
+```
+
+**Pronto!** Agora toda operação de INSERT/UPDATE/DELETE enviará eventos WebSocket automaticamente.
+
+---
+
+#### Cliente JavaScript (Exemplo Completo)
+
+**Instalação no frontend:**
+```bash
+npm install socket.io-client
+# ou
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+```
+
+**Código do Cliente:**
+
+```javascript
+import { io } from 'socket.io-client';
+
+// Conecta ao WebSocket
+const socket = io('http://localhost:3000');
+
+// Evento: Conexão estabelecida
+socket.on('connection_response', (data) => {
+    console.log('Conectado ao SQLManager WebSocket');
+    console.log('Features disponíveis:', data.features);
+    
+    // Se inscreve em tabelas específicas
+    socket.emit('subscribe', { table: 'ProductsTable' });
+    socket.emit('subscribe', { table: 'OrdersTable' });
+});
+
+// Confirmação de inscrição
+socket.on('subscribed', (data) => {
+    console.log(`Inscrito em: ${data.table}`);
+});
+
+// ===== NOTIFICAÇÕES SIMPLES (sempre enviadas) =====
+socket.on('db_notification', (event) => {
+    console.log('Notificação:', event);
+    /*
+    Exemplo de event:
+    {
+        action: 'insert',   // ou 'update', 'delete', 'batch_update', 'batch_delete'
+        table: 'ProductsTable',
+        recid: 123
+    }
+    */
+    
+    // Atualiza UI baseado na ação
+    if (event.action === 'insert') {
+        // Fetch novo registro ou adiciona placeholder
+        fetchProductById(event.recid);
+    } else if (event.action === 'update') {
+        // Recarrega registro atualizado
+        refreshProduct(event.recid);
+    } else if (event.action === 'delete') {
+        // Remove da UI
+        removeProductFromList(event.recid);
+    }
+});
+
+// ===== DADOS COMPLETOS (enviado apenas se registro for buscado) =====
+socket.on('db_data_sync', (event) => {
+    console.log('Sincronização de dados:', event);
+    /*
+    Exemplo de event:
+    {
+        action: 'update',
+        table: 'ProductsTable',
+        recid: 123,
+        data: {
+            RECID: 123,
+            ITEMID: '01.01',
+            ITEMNAME: 'Produto Atualizado',
+            PRICE: 99.90,
+            ...
+        }
+    }
+    */
+    
+    // Atualiza dados diretamente sem fazer fetch
+    updateProductInCache(event.data);
+});
+
+// Cancelar inscrição (cleanup ao desmontar componente)
+function unsubscribeFromTable(tableName) {
+    socket.emit('unsubscribe', { table: tableName });
+}
+
+// Exemplo de funções auxiliares
+function fetchProductById(recid) {
+    fetch(`http://localhost:3000/manager/ProductsTable/${recid}`)
+        .then(res => res.json())
+        .then(product => addProductToList(product.data));
+}
+
+function refreshProduct(recid) {
+    fetch(`http://localhost:3000/manager/ProductsTable/${recid}`)
+        .then(res => res.json())
+        .then(product => updateProductInList(product.data));
+}
+
+function removeProductFromList(recid) {
+    const element = document.querySelector(`[data-recid="${recid}"]`);
+    if (element) element.remove();
+}
+
+function updateProductInCache(productData) {
+    // Atualiza estado global/Redux/Zustand/etc
+    store.updateProduct(productData);
+}
+```
+
+---
+
+#### Exemplo com React Hooks
+
+```jsx
+import { useEffect, useState } from 'react';
+import { io } from 'socket.io-client';
+
+function ProductsRealtime() {
+    const [products, setProducts] = useState([]);
+    const [socket, setSocket] = useState(null);
+
+    useEffect(() => {
+        // Conecta ao WebSocket
+        const ws = io('http://localhost:3000');
+        setSocket(ws);
+
+        ws.on('connection_response', () => {
+            console.log('Conectado');
+            ws.emit('subscribe', { table: 'ProductsTable' });
+        });
+
+        // Notificações simples
+        ws.on('db_notification', (event) => {
+            if (event.table !== 'ProductsTable') return;
+
+            if (event.action === 'insert' || event.action === 'update') {
+                // Recarrega lista
+                fetchProducts();
+            } else if (event.action === 'delete') {
+                // Remove localmente
+                setProducts(prev => prev.filter(p => p.RECID !== event.recid));
+            }
+        });
+
+        // Dados completos (opcional, mais eficiente)
+        ws.on('db_data_sync', (event) => {
+            if (event.table !== 'ProductsTable') return;
+
+            if (event.action === 'insert') {
+                setProducts(prev => [...prev, event.data]);
+            } else if (event.action === 'update') {
+                setProducts(prev => prev.map(p => 
+                    p.RECID === event.recid ? event.data : p
+                ));
+            }
+        });
+
+        // Cleanup
+        return () => {
+            ws.emit('unsubscribe', { table: 'ProductsTable' });
+            ws.disconnect();
+        };
+    }, []);
+
+    const fetchProducts = async () => {
+        const res = await fetch('http://localhost:3000/manager/ProductsTable');
+        const json = await res.json();
+        setProducts(json.data);
+    };
+
+    return (
+        <div>
+            <h1>Produtos (Tempo Real)</h1>
+            <ul>
+                {products.map(p => (
+                    <li key={p.RECID}>{p.ITEMNAME} - R$ {p.PRICE}</li>
+                ))}
+            </ul>
+        </div>
+    );
+}
+```
+
+---
+
+#### Tipos de Eventos WebSocket
+
+| Evento (Cliente → Servidor) | Descrição | Payload |
+|------------------------------|-----------|---------|
+| `connect` | Conecta ao WebSocket | - |
+| `subscribe` | Inscreve em uma tabela | `{ table: 'ProductsTable' }` |
+| `unsubscribe` | Cancela inscrição | `{ table: 'ProductsTable' }` |
+
+| Evento (Servidor → Cliente) | Descrição | Exemplo de Payload |
+|------------------------------|-----------|-------------------|
+| `connection_response` | Confirmação de conexão | `{ status: 'connected', features: [...] }` |
+| `subscribed` | Confirmação de inscrição | `{ table: 'ProductsTable', message: '...' }` |
+| `unsubscribed` | Confirmação de cancelamento | `{ table: 'ProductsTable' }` |
+| `db_notification` | Notificação simples de mudança | `{ action: 'update', table: 'Products', recid: 123 }` |
+| `db_data_sync` | Dados completos do registro | `{ action: 'insert', table: 'Products', recid: 456, data: {...} }` |
+
+---
+
+#### Quando Usar Cada Modo
+
+**Notificação Simples (`db_notification`):**
+- Atualizar contadores (ex: "5 novos pedidos")
+- Invalidar cache local
+- Mostrar toast/notificação
+- Recarregar lista completa
+
+**Dados Completos (`db_data_sync`):**
+- Sincronização em tempo real sem refetch
+- Atualizar registro específico na UI
+- WebSocket como fonte única de verdade
+- Mais pesado (envia JSON completo)
+
+---
+
+#### Desabilitando WebSocket
+
+Se não quiser usar WebSocket, basta não alocalós ao sistema da **autoRouter**:
+
+```bash
+pip uninstall flask-socketio python-socketio
+```
+
+O AutoRouter detecta automaticamente e **desabilita** o WebSocket sem erros.
 
 ---
 

@@ -17,6 +17,7 @@ from ..connection import database_connection
 from .TableController   import TableController
 from .ViewController    import ViewController
 from .SystemController  import SystemController
+from .WebSocketManager  import WebSocketManager
 
 try:
     from flask import Flask, request, jsonify
@@ -42,7 +43,7 @@ class AutoRouter:
         # Rotas são registradas automaticamente
     """    
     
-    def __init__(self, db: database_connection, app: Optional[Any] = None):
+    def __init__(self, db: database_connection, app: Optional[Any] = None, socketio: Optional[Any] = None):
         self.db      = db
         self.app     = app
         self.config  = CoreConfig.get_router_config()
@@ -66,6 +67,9 @@ class AutoRouter:
         self._is_view_cache:   Dict[str, bool]           = {}  # Cache para saber se é View
         self._query_cache:     Dict[str, tuple]          = {}  # Cache de queries: {cache_key: (timestamp, data)}
         self._cache_ttl = 30  # TTL do cache em segundos
+        
+        # WebSocket Manager (automático)
+        self.ws_manager = WebSocketManager(app, socketio) if app else None
         
         # Registra rotas Flask automaticamente se app foi fornecido
         if self.app and self.enabled:
@@ -685,7 +689,20 @@ class AutoRouter:
         
         try:
             if table.insert():
-                return {"status": 201, "data": {"RECID": table.RECID}, "message": "Created"}
+                recid_value = table.RECID.value if hasattr(table.RECID, 'value') else table.RECID
+                
+                # Broadcast WebSocket (automático)
+                if self.ws_manager and self.ws_manager.enabled:
+                    # Busca dados completos do registro inserido
+                    table.select().where(table.RECID == recid_value).execute()
+                    if table.records:
+                        data = self._serialize(table.records[0], field_map)
+                        self.ws_manager.broadcast_insert(table.source_name, recid_value, data)
+                    else:
+                        # Fallback: notificação simples
+                        self.ws_manager.broadcast_insert(table.source_name, recid_value)
+                
+                return {"status": 201, "data": {"RECID": recid_value}, "message": "Created"}
             else:
                 return {"status": 400, "error": "Failed to insert record"}
         except Exception as e:
@@ -715,6 +732,17 @@ class AutoRouter:
             affected = table.update_recordset(where=(table.RECID == recid), **valid_fields)
             
             if affected > 0:
+                # Broadcast WebSocket (automático)
+                if self.ws_manager and self.ws_manager.enabled:
+                    # Busca dados atualizados
+                    table.select().where(table.RECID == recid).execute()
+                    if table.records:
+                        data = self._serialize(table.records[0], field_map)
+                        self.ws_manager.broadcast_update(table.source_name, recid, data)
+                    else:
+                        # Fallback: notificação simples
+                        self.ws_manager.broadcast_update(table.source_name, recid)
+                
                 return {"status": 200, "message": "Updated successfully"}
             else:
                 return {"status": 304, "message": "No changes made"}
@@ -749,6 +777,10 @@ class AutoRouter:
                 table.update_recordset(where=(table.RECID == recid), **{field: value})
             else:
                 table.delete_from().where(table.RECID == recid).execute()
+            
+            # Broadcast WebSocket (automático)
+            if self.ws_manager and self.ws_manager.enabled:
+                self.ws_manager.broadcast_delete(table.source_name, recid)
             
             return {"status": 200, "message": "Deleted successfully"}
         except Exception as e:

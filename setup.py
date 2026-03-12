@@ -12,7 +12,7 @@ class CustomInstallCommand(install):
 
 setup(
     name="SQLManager",
-    version="4.0.1",
+    version="4.1.1",
     description="Sistema para gerenciamento de banco de dados e validações",
     author="Avalon Tecnologia",
     author_email="nicolas.santos@avalontecnologia.com.br",
@@ -34,6 +34,10 @@ setup(
     install_requires=[
         "pyodbc>=4.0.0",
         "python-dotenv>=0.19.0",
+        
+        #''' [BEGIN CODE] Project: SQLManager Version 4.0 / made by: Nicolas Santos / created: 12/03/2026 '''
+        "flask-socketio>=5.0.0",  # Para WebSocketManager
+        #''' [END CODE] Project: SQLManager Version 4.0 / made by: Nicolas Santos / created: 12/03/2026 '''
     ],
     classifiers=[
         "Development Status :: 4 - Beta",
