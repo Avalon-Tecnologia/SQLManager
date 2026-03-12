@@ -14,6 +14,7 @@ from ..CoreConfig import CoreConfig
 from ..connection import database_connection
 
 from .TableController   import TableController
+from .ViewController    import ViewController
 from .SystemController  import SystemController
 
 try:
@@ -61,6 +62,7 @@ class AutoRouter:
         # Cache de classes e metadados para evitar reflection repetitivo
         self._class_cache:     Dict[str, Any]            = {}
         self._field_map_cache: Dict[str, Dict[str, str]] = {}
+        self._is_view_cache:   Dict[str, bool]           = {}  # Cache para saber se é View
         
         # Registra rotas Flask automaticamente se app foi fornecido
         if self.app and self.enabled:
@@ -121,9 +123,15 @@ class AutoRouter:
                 # 5. Verificar Configuração Específica da Tabela (O(1))
                 table_config = self._tables_config.get(table_upper, {})
                 
-                allowed = table_config.get('allowed_methods', ["GET", "POST", "PATCH", "DELETE"])
+                # Views: apenas GET permitido
+                is_view = self._is_view_cache.get(table_upper, False)
+                if is_view:
+                    allowed = ["GET"]
+                else:
+                    allowed = table_config.get('allowed_methods', ["GET", "POST", "PATCH", "DELETE"])
+                
                 if method not in allowed:
-                    return {"status": 405, "error": f"Method {method} not allowed for table {table_name}"}
+                    return {"status": 405, "error": f"Method {method} not allowed for {('view' if is_view else 'table')} {table_name}"}
                 
                 bound.arguments['_table'] = table
                 bound.arguments['_table_config'] = table_config
@@ -154,18 +162,24 @@ class AutoRouter:
             return self._class_cache[table_upper]
 
         module = None
+        is_view = False
         
-        # Mesmos caminhos do _discover_tables
+        # Busca em TablePack e ViewPack
         possible_modules = [
-            "model.TablePack",
-            "src.model.TablePack",
-            "model.tables",
-            "src.model.tables",
+            ("model.TablePack", False),
+            ("src.model.TablePack", False),
+            ("model.tables", False),
+            ("src.model.tables", False),
+            ("model.ViewPack", True),
+            ("src.model.ViewPack", True),
+            ("model.views", True),
+            ("src.model.views", True),
         ]
 
-        for mod_name in possible_modules:
+        for mod_name, is_view_module in possible_modules:
             try:
-                module = importlib.import_module(mod_name)                
+                module = importlib.import_module(mod_name)
+                is_view = is_view_module
                 break
             except ImportError:
                 continue
@@ -181,6 +195,7 @@ class AutoRouter:
                     try:
                         cls = getattr(module, name)
                         self._class_cache[table_upper] = cls
+                        self._is_view_cache[table_upper] = is_view
                         return cls
                     except AttributeError:
                         continue
@@ -190,6 +205,7 @@ class AutoRouter:
             if name.upper() == table_upper:
                 cls = getattr(module, name)
                 self._class_cache[table_upper] = cls
+                self._is_view_cache[table_upper] = is_view
                 return cls
             
         return None
@@ -241,7 +257,13 @@ class AutoRouter:
         for table_name in tables:
             table_upper = table_name.upper()
             table_config = self._tables_config.get(table_upper, {})
-            allowed_methods = table_config.get('allowed_methods', ["GET", "POST", "PATCH", "DELETE"])
+            
+            # Views: apenas GET permitido
+            is_view = self._is_view_cache.get(table_upper, False)
+            if is_view:
+                allowed_methods = ["GET"]
+            else:
+                allowed_methods = table_config.get('allowed_methods', ["GET", "POST", "PATCH", "DELETE"])
             
             # Cria closures para cada tabela (evita problema de binding tardio)
             routes_count = self._register_table_routes(table_name, allowed_methods, suffix)
@@ -700,54 +722,64 @@ class AutoRouter:
         Descobre todas as tabelas disponíveis no TablePack para geração de documentação.
         """
         tables = []
-        # Tenta diferentes estruturas de projeto
+        # Tenta diferentes estruturas de projeto (Tables e Views)
         possible_modules = [
-            "model.TablePack",      # Estrutura padrão SQLManager
-            "src.model.TablePack",  # Estrutura com src/
-            "model.tables",         # TablePack via import as
-            "src.model.tables",     # src/ + tables
+            ("model.TablePack", False),      # Estrutura padrão SQLManager
+            ("src.model.TablePack", False),  # Estrutura com src/
+            ("model.tables", False),         # TablePack via import as
+            ("src.model.tables", False),     # src/ + tables
+            ("model.ViewPack", True),        # ViewPack
+            ("src.model.ViewPack", True),    # ViewPack com src/
+            ("model.views", True),           # ViewPack via import as
+            ("src.model.views", True),       # src/ + views
         ]
         
-        module = None
-        module_name = None
+        # Busca em todos os módulos (Tables e Views)
+        all_items = []
+        found_modules = []
         
-        for mod_name in possible_modules:
+        for mod_name, is_view_module in possible_modules:
             try:
                 module = importlib.import_module(mod_name)
-                module_name = mod_name
-                break
+                found_modules.append((module, mod_name, is_view_module))
             except ImportError:
                 continue
         
-        if not module:
+        if not found_modules:
             if self._should_print_logs():
-                print(f"{SystemController.custom_text('[AutoRouter]', 'yellow')} Nenhum módulo TablePack encontrado.")
+                print(f"{SystemController.custom_text('[AutoRouter]', 'yellow')} Nenhum módulo TablePack/ViewPack encontrado.")
             return []
         
-        # Verifica se há __all__ definido no módulo
-        items_to_check = module.__all__ if hasattr(module, '__all__') else [n for n in dir(module) if not n.startswith('_')]
-        
+        # Processa cada módulo encontrado
         excluded_count = 0
-        for name in items_to_check:
-            if name.startswith('_'):
-                continue
-            if name.upper() in self._exclude_tables:
-                excluded_count += 1
-                continue
+        total_count = 0
+        
+        for module, mod_name, is_view_module in found_modules:
+            items_to_check = module.__all__ if hasattr(module, '__all__') else [n for n in dir(module) if not n.startswith('_')]
             
-            try:
-                attr = getattr(module, name)
-                if isinstance(attr, type):
-                    tables.append(name)
-            except AttributeError:
-                continue
+            for name in items_to_check:
+                if name.startswith('_'):
+                    continue
+                if name.upper() in self._exclude_tables:
+                    excluded_count += 1
+                    continue
+                
+                try:
+                    attr = getattr(module, name)
+                    if isinstance(attr, type):
+                        tables.append(name)
+                        total_count += 1
+                        # Armazena no cache se é view
+                        self._is_view_cache[name.upper()] = is_view_module
+                except AttributeError:
+                    continue
         
         if not tables:
             if self._should_print_logs():
-                print(f"{SystemController.custom_text('[AutoRouter]', 'yellow')} Nenhuma tabela encontrada.")
+                print(f"{SystemController.custom_text('[AutoRouter]', 'yellow')} Nenhuma tabela/view encontrada.")
         else:
             if self._should_print_logs():
-                msg = f"Módulo '{module_name}' - {len(tables)} tabela(s) descoberta(s)"
+                msg = f"{total_count} tabela(s)/view(s) descoberta(s)"
                 if excluded_count > 0:
                     msg += f" ({excluded_count} excluída(s))"
                 print(f"{SystemController.custom_text('[AutoRouter]', 'green')} {msg}")
@@ -777,7 +809,13 @@ class AutoRouter:
         for table_name in tables:
             table_upper = table_name.upper()
             table_config = self._tables_config.get(table_upper, {})
-            allowed_methods = table_config.get('allowed_methods', ["GET", "POST", "PATCH", "DELETE"])
+            
+            # Views: apenas GET permitido
+            is_view = self._is_view_cache.get(table_upper, False)
+            if is_view:
+                allowed_methods = ["GET"]
+            else:
+                allowed_methods = table_config.get('allowed_methods', ["GET", "POST", "PATCH", "DELETE"])
             
             routes = []
             base_endpoint = f"/{suffix}/{table_name}"
@@ -846,7 +884,13 @@ class AutoRouter:
         for table_name in tables:
             table_upper = table_name.upper()
             table_config = self._tables_config.get(table_upper, {})
-            allowed = table_config.get('allowed_methods', ["GET", "POST", "PATCH", "DELETE"])
+            
+            # Views: apenas GET permitido
+            is_view = self._is_view_cache.get(table_upper, False)
+            if is_view:
+                allowed = ["GET"]
+            else:
+                allowed = table_config.get('allowed_methods', ["GET", "POST", "PATCH", "DELETE"])
             
             table_items = []
             

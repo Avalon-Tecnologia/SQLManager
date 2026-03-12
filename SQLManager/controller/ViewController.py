@@ -34,6 +34,14 @@ class ViewController:
 
         self.__select_manager = SelectManager(self) 
 
+    @property
+    def table_name(self) -> str:
+        return self.source_name
+    
+    @table_name.setter
+    def table_name(self, value: str):
+        self.source_name = value
+
     def __getattribute__(self, name: str):
         '''
         Intercepta acesso aos campos:
