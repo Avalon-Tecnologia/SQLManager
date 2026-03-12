@@ -82,6 +82,9 @@ class TableController(metaclass=TableControllerMeta):
     
     # Cache estático de colunas com DEFAULT por tabela
     _defaults_cache: Dict[str, set] = {}
+    # Cache estático para COUNT(*) com TTL de 60 segundos
+    _count_cache: Dict[str, tuple] = {}  # {cache_key: (timestamp, count)}
+    _count_cache_ttl: int = 60
     
     ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
     def __init__(self, db: Union[data, Transaction], source_name: Optional[str] = None, table_name: Optional[str] = None):
@@ -177,7 +180,7 @@ class TableController(metaclass=TableControllerMeta):
             'insert_recordset', 'update_recordset', 'delete_from', 'set_current',
             'clear', 'validate_fields', 'validate_write', 'get_table_columns',
             'get_columns_with_defaults', 'get_table_index', 'get_table_foreign_keys',
-            'get_table_total', 'exists', '_get_field_instance', '_is_aggregate_function',
+            'get_table_total', 'count', 'paginate', 'exists', '_get_field_instance', '_is_aggregate_function',
             '_extract_field_from_aggregate', 'SelectForUpdate', '_register_class_fields',
             'table_name', 'new_Relation', 'relations'
         }
@@ -498,6 +501,81 @@ class TableController(metaclass=TableControllerMeta):
             bool: True se existir pelo menos um registro, False caso contrário.
         '''
         return self._check_exists(where)
+    
+    def count(self, where: Optional[Union[FieldCondition, BinaryExpression]] = None, use_cache: bool = True) -> int:
+        '''
+        Executa COUNT(*) diretamente no banco de dados (não carrega registros).
+        Otimizado para performance com cache de 60 segundos.
+        
+        Args:
+            where: Condição WHERE opcional usando operadores sobrecarregados
+                   Ex: tabela.CAMPO == 5
+            use_cache: Se True, usa cache de 60 segundos para o resultado
+        
+        Returns:
+            int: Total de registros que atendem à condição
+        
+        Exemplo:
+            total = tabela.count()  # COUNT(*) de toda tabela
+            ativos = tabela.count(where=tabela.ATIVO == True)  # COUNT com filtro
+        '''
+        import time
+        import hashlib
+        
+        # Gera chave de cache baseada na tabela e condição WHERE
+        where_str = str(where) if where else ""
+        cache_key = f"{self.source_name}_{hashlib.md5(where_str.encode()).hexdigest()}"
+        
+        # Verifica cache
+        if use_cache and cache_key in TableController._count_cache:
+            timestamp, cached_count = TableController._count_cache[cache_key]
+            if time.time() - timestamp < TableController._count_cache_ttl:
+                return cached_count
+        
+        # Executa COUNT(*) direto no banco
+        query = f"SELECT COUNT(*) FROM [{self.source_name}]"
+        params = []
+        
+        if where:
+            where_clause, where_params = where.to_sql()
+            query += f" WHERE {where_clause}"
+            params = where_params
+        
+        result = self.db.doQuery(query, params)
+        count_value = result[0][0] if result else 0
+        
+        # Cacheia resultado
+        if use_cache:
+            TableController._count_cache[cache_key] = (time.time(), count_value)
+        
+        return count_value
+    
+    def paginate(self, page: int = 1, limit: int = 20, where: Optional[Union[FieldCondition, BinaryExpression]] = None):
+        '''
+        Helper para paginação automática com limit/offset.
+        
+        Args:
+            page: Número da página (1-indexed, padrão: 1)
+            limit: Registros por página (padrão: 20)
+            where: Condição WHERE opcional
+        
+        Returns:
+            SelectManager: Query configurada com paginação (auto-executa)
+        
+        Exemplo:
+            # Página 1 com 20 registros
+            tabela.paginate(page=1, limit=20)
+            
+            # Página 2 com filtro
+            tabela.paginate(page=2, limit=50, where=tabela.ATIVO == True)
+        '''
+        offset = (page - 1) * limit
+        mgr = self.select().limit(limit).offset(offset)
+        
+        if where:
+            mgr = mgr.where(where)
+        
+        return mgr
 
     def validate_fields(self) -> Dict[str, Any]:
         '''

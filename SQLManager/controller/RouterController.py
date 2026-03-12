@@ -64,33 +64,14 @@ class AutoRouter:
         self._class_cache:     Dict[str, Any]            = {}
         self._field_map_cache: Dict[str, Dict[str, str]] = {}
         self._is_view_cache:   Dict[str, bool]           = {}  # Cache para saber se é View
-        self._table_count_cache: Dict[str, tuple]        = {}  # Cache de total: {table_name: (timestamp, count)}
-        
-        # Detecta tipo de banco para otimizações específicas
-        self._db_type = self._detect_db_type()
+        self._query_cache:     Dict[str, tuple]          = {}  # Cache de queries: {cache_key: (timestamp, data)}
+        self._cache_ttl = 30  # TTL do cache em segundos
         
         # Registra rotas Flask automaticamente se app foi fornecido
         if self.app and self.enabled:
             if not FLASK_AVAILABLE:
                 raise ImportError("Flask não está disponível. Instale com: pip install flask")
-            self._register_routes()
-    
-    def _detect_db_type(self) -> str:
-        """Detecta o tipo de banco (mssql, postgres, mysql, etc)"""
-        try:
-            if hasattr(self.db, 'db_type'):
-                return self.db.db_type.lower()
-            # Tenta detectar pela connection string
-            conn_str = str(getattr(self.db, 'connection_string', ''))
-            if 'sqlserver' in conn_str.lower() or 'mssql' in conn_str.lower():
-                return 'mssql'
-            elif 'postgres' in conn_str.lower():
-                return 'postgres'
-            elif 'mysql' in conn_str.lower():
-                return 'mysql'
-        except:
-            pass
-        return 'unknown'        
+            self._register_routes()        
 
     ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #3 / made by: Nicolas Santos / created: 27/02/2026 '''
     def _pre_handle(func):
@@ -309,7 +290,6 @@ class AutoRouter:
         # Imprime apenas no processo recarregado do Flask (evita duplicação)
         if self._should_print_logs():
             print(f"{SystemController.custom_text('[AutoRouter]', 'green')} {total_routes} rotas registradas (/{suffix}/)")
-            print(f"{SystemController.custom_text('[AutoRouter]', 'cyan')} Database type: {self._db_type}")
     
     def _register_table_routes(self, table_name: str, allowed_methods: List[str], suffix: str) -> int:
         """
@@ -470,100 +450,19 @@ class AutoRouter:
     ''' [END CODE] Project: SQLManager Version 4.0 / issue: #3 / made by: Nicolas Santos / created: 27/02/2026 '''
 
     ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
-    def _get_relation_names(self, table: TableController) -> List[str]:
+    def _get_relation_names(self, table: Union[TableController, ViewController]) -> List[str]:
         """Retorna lista de nomes de relations se a tabela tiver relations definidas"""
         if hasattr(table, 'relations') and table.relations:
             return list(table.relations.keys())
         return []
-    
-    def _get_table_total(self, table: TableController, where_condition=None) -> int:
-        """Retorna o total de registros na tabela (com ou sem filtro)"""
-        try:
-            # Cache apenas para totais SEM filtro (mais comum)
-            if where_condition is None:
-                table_name = table.source_name
-                cache_ttl = 60  # 60 segundos de cache
-                
-                # Verifica cache
-                if table_name in self._table_count_cache:
-                    cached_time, cached_count = self._table_count_cache[table_name]
-                    if time.time() - cached_time < cache_ttl:
-                        return cached_count
-                
-                # Calcula e cacheia
-                total = table.get_table_total()
-                self._table_count_cache[table_name] = (time.time(), total)
-                return total
-            else:
-                # Com filtro: sempre recalcula
-                from ..controller.managers import Select_Manager
-                select = Select_Manager.SelectQuery(table)
-                select.where(where_condition)
-                query = select._build_count_query()
-                result = table.db.execute(query)
-                return result[0][0] if result else 0
-        except:
-            return 0
-    
-    def _fast_paginated_select(self, table: TableController, limit: int, offset: int) -> List:
-        """
-        Execução otimizada de SELECT paginado usando SQL direto.
-        Muito mais rápido que ORM para queries simples sem filtros.
-        """
-        try:
-            table_name = table.source_name
-            
-            # SQL Server: usa ORDER BY OFFSET FETCH (mais rápido que subqueries)
-            if self._db_type == 'mssql':
-                # Precisa de ORDER BY para OFFSET/FETCH funcionar
-                sql = f"""
-                    SELECT * FROM {table_name} WITH (NOLOCK)
-                    ORDER BY RECID
-                    OFFSET {offset} ROWS
-                    FETCH NEXT {limit} ROWS ONLY
-                """
-            # PostgreSQL
-            elif self._db_type == 'postgres':
-                sql = f"SELECT * FROM {table_name} ORDER BY RECID LIMIT {limit} OFFSET {offset}"
-            # MySQL
-            elif self._db_type == 'mysql':
-                sql = f"SELECT * FROM {table_name} ORDER BY RECID LIMIT {limit} OFFSET {offset}"
-            else:
-                # Fallback: usa ORM
-                return None
-            
-            # Executa query direta
-            result = table.db.execute(sql)
-            
-            # Converte rows para objetos da tabela
-            records = []
-            for row in result:
-                # Cria nova instância da tabela
-                record = table.__class__(table.db)
-                # Popula campos
-                for i, col_name in enumerate(table.Columns):
-                    if i < len(row):
-                        setattr(record, col_name, row[i])
-                records.append(record)
-            
-            return records
-        except Exception as e:
-            print(f"[DEBUG] Fast select failed: {e}, falling back to ORM")
-            return None
         
-    def _handle_get(self, table: TableController, path_parts: List[str], params: Dict, config: Dict):        
+    def _handle_get(self, table: Union[TableController, ViewController], path_parts: List[str], params: Dict, config: Dict):        
         try:
-            # Debug timing (remover depois)
-            import time as time_module
-            start_time = time_module.time()
-            
             field_map = self._get_field_map()
             relation_names = self._get_relation_names(table)
             
             # Verifica se deve incluir relations (opt-in para performance)
             include_relations = params.get('include_relations', '').lower() in ('true', '1', 'yes')
-            
-            print(f"[DEBUG] Field map took: {time_module.time() - start_time:.3f}s")
 
             # Rota: GET /{table}/{id}
             if path_parts and path_parts[0].isdigit():                                
@@ -621,12 +520,12 @@ class AutoRouter:
         except ValueError:
             return {"status": 400, "error": "Invalid pagination parameters"}
 
-        offset = (page - 1) * limit
         where_condition = None
         
-        if params and len(params) > 0 and any(k not in ('page', 'limit') for k in params):
+        # Processa filtros (campo=valor, campo_gt=valor, etc)
+        if params and len(params) > 0 and any(k not in ('page', 'limit', 'include_relations', 'include_total') for k in params):
             for key, value in params.items():
-                if key in ('page', 'limit'):
+                if key in ('page', 'limit', 'include_relations', 'include_total'):
                     continue
             
             field_name_raw = key
@@ -654,81 +553,28 @@ class AutoRouter:
                     case 'lte':  where_condition = (field_attr <= value)
                     case 'neq':  where_condition = (field_attr != value)
                     case 'like': where_condition = field_attr.like(str(value))
-                
-                # Monta query com ordem CORRETA: select -> where -> relations -> limit/offset
-                select_query = table.select().where(where_condition)
-                
-                # Relations APENAS se requisitado (performance!)
-                if include_relations and relation_names:
-                    select_query = select_query.with_relations(*relation_names)
-                
-                select_query = select_query.limit(limit).offset(offset)
-                select_query.execute()
-                print(f"[DEBUG] Query execution (with filter) took: {time_module.time() - start_time:.3f}s")
-        else:
-            # Monta query com ordem CORRETA: select -> relations -> limit/offset
-            query_start = time_module.time()
-            
-            # OTIMIZAÇÃO: Query SQL direta para paginação simples (SEM filtros e SEM relations)
-            if not include_relations and not relation_names:
-                print(f"[DEBUG] Usando query SQL otimizada (bypass ORM)")
-                fast_records = self._fast_paginated_select(table, limit, offset)
-                
-                if fast_records is not None:
-                    table.records = fast_records
-                    print(f"[DEBUG] Fast query execution took: {time_module.time() - query_start:.3f}s")
-                    print(f"[DEBUG] Records returned: {len(table.records)}")
-                else:
-                    # Fallback para ORM normal
-                    print(f"[DEBUG] Fallback para ORM")
-                    select_query = table.select()
-                    select_query = select_query.limit(limit).offset(offset)
-                    
-                    try:
-                        sql_query = select_query._build_query()
-                        print(f"[DEBUG] SQL Query: {sql_query[:200]}...")
-                    except:
-                        pass
-                    
-                    select_query.execute()
-                    print(f"[DEBUG] Query execution (ORM) took: {time_module.time() - query_start:.3f}s")
-                    print(f"[DEBUG] Records returned: {len(table.records)}")
-            else:
-                # Com relations: usa ORM normal
-                select_query = table.select()
-                
-                if include_relations and relation_names:
-                    select_query = select_query.with_relations(*relation_names)
-                
-                select_query = select_query.limit(limit).offset(offset)
-                
-                try:
-                    sql_query = select_query._build_query()
-                    print(f"[DEBUG] SQL Query: {sql_query[:200]}...")
-                except:
-                    pass
-                
-                select_query.execute()
-                print(f"[DEBUG] Query execution (with relations) took: {time_module.time() - query_start:.3f}s")
-                print(f"[DEBUG] Records returned: {len(table.records)}")
-
-        # SLICE DEFENSIVO: garante que NUNCA retorna mais que o limit
-        serialize_start = time_module.time()
-        records_to_serialize = table.records[:limit] if len(table.records) > limit else table.records
-        data = [self._serialize(r, field_map) for r in records_to_serialize]
-        print(f"[DEBUG] Serialization took: {time_module.time() - serialize_start:.3f}s")
+        
+        # USA O MÉTODO OTIMIZADO DO CONTROLLER (com cache de 60s)
+        select_query = table.paginate(page=page, limit=limit, where=where_condition)
+        
+        # Relations APENAS se requisitado (performance!)
+        if include_relations and relation_names:
+            select_query = select_query.with_relations(*relation_names)
+        
+        select_query.execute()
+        
+        # Serializa resultados
+        data = [self._serialize(r, field_map) for r in table.records]
         
         # Total é DESABILITADO por padrão (performance em tabelas grandes!)
         # Use ?include_total=true se precisar do count total
         if params.get('include_total', '').lower() in ('true', '1', 'yes'):
-            count_start = time_module.time()
-            total = self._get_table_total(table, where_condition)
-            print(f"[DEBUG] Count query took: {time_module.time() - count_start:.3f}s")
+            # USA O COUNT() OTIMIZADO DO CONTROLLER (com cache de 60s)
+            total = table.count(where=where_condition, use_cache=True)
             meta = {"page": page, "limit": limit, "count": len(data), "total": total}
         else:
             meta = {"page": page, "limit": limit, "count": len(data)}
         
-        print(f"[DEBUG] TOTAL request took: {time_module.time() - start_time:.3f}s")
         return {
             "status": 200, 
             "data": data,

@@ -14,6 +14,9 @@ class ViewController:
     assim como a classe TableController, esta classe é responsável por gerenciar as operações relacionadas às views do banco de dados a consulta de views.
     '''
     _default_cache: Dict[str, set] = {}
+    # Cache estático para COUNT(*) com TTL de 60 segundos
+    _count_cache: Dict[str, tuple] = {}  # {cache_key: (timestamp, count)}
+    _count_cache_ttl: int = 60
 
     def __init__(self, db: Union[data, Transaction], source_name: Optional[str] = None, table_name: Optional[str] = None):
         '''
@@ -58,7 +61,7 @@ class ViewController:
             'controller', '__class__', '__dict__', '_pending_wrapper',
             '__select_manager', 'field', 'select','set_current',
             'clear', 'validate_fields', 'get_table_columns', 'get_columns_with_defaults', 
-            'get_table_index', 'get_table_foreign_keys', 'get_table_total', 
+            'get_table_index', 'get_table_foreign_keys', 'get_table_total', 'count', 'paginate',
             'exists', '_get_field_instance', '_is_aggregate_function', '_extract_field_from_aggregate'
         }
         
@@ -282,6 +285,81 @@ class ViewController:
             int: Total de registros.
         '''        
         return len(self.records)
+    
+    def count(self, where: Optional[Union[FieldCondition, BinaryExpression]] = None, use_cache: bool = True) -> int:
+        '''
+        Executa COUNT(*) diretamente no banco de dados (não carrega registros).
+        Otimizado para performance com cache de 60 segundos.
+        
+        Args:
+            where: Condição WHERE opcional usando operadores sobrecarregados
+                   Ex: view.CAMPO == 5
+            use_cache: Se True, usa cache de 60 segundos para o resultado
+        
+        Returns:
+            int: Total de registros que atendem à condição
+        
+        Exemplo:
+            total = view.count()  # COUNT(*) de toda view
+            ativos = view.count(where=view.ATIVO == True)  # COUNT com filtro
+        '''
+        import time
+        import hashlib
+        
+        # Gera chave de cache baseada na view e condição WHERE
+        where_str = str(where) if where else ""
+        cache_key = f"{self.source_name}_{hashlib.md5(where_str.encode()).hexdigest()}"
+        
+        # Verifica cache
+        if use_cache and cache_key in ViewController._count_cache:
+            timestamp, cached_count = ViewController._count_cache[cache_key]
+            if time.time() - timestamp < ViewController._count_cache_ttl:
+                return cached_count
+        
+        # Executa COUNT(*) direto no banco
+        query = f"SELECT COUNT(*) FROM [{self.source_name}]"
+        params = []
+        
+        if where:
+            where_clause, where_params = where.to_sql()
+            query += f" WHERE {where_clause}"
+            params = where_params
+        
+        result = self.db.doQuery(query, params)
+        count_value = result[0][0] if result else 0
+        
+        # Cacheia resultado
+        if use_cache:
+            ViewController._count_cache[cache_key] = (time.time(), count_value)
+        
+        return count_value
+    
+    def paginate(self, page: int = 1, limit: int = 20, where: Optional[Union[FieldCondition, BinaryExpression]] = None):
+        '''
+        Helper para paginação automática com limit/offset.
+        
+        Args:
+            page: Número da página (1-indexed, padrão: 1)
+            limit: Registros por página (padrão: 20)
+            where: Condição WHERE opcional
+        
+        Returns:
+            SelectManager: Query configurada com paginação (auto-executa)
+        
+        Exemplo:
+            # Página 1 com 20 registros
+            view.paginate(page=1, limit=20)
+            
+            # Página 2 com filtro
+            view.paginate(page=2, limit=50, where=view.ATIVO == True)
+        '''
+        offset = (page - 1) * limit
+        mgr = self.select().limit(limit).offset(offset)
+        
+        if where:
+            mgr = mgr.where(where)
+        
+        return mgr
     
     def validate_fields(self) -> Dict[str, Any]:
         '''

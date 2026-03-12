@@ -385,8 +385,16 @@ class SelectManager:
 
             query += " HAVING " + " AND ".join(having_clauses)
         
+        # ORDER BY + PAGINAÇÃO (SEMPRE aplicado se houver limit)
+        # Se não tiver ORDER BY explícito mas tiver LIMIT, usa RECID como padrão
         if self._order_by or self._order_by is not None:
             query += f" ORDER BY {main_alias}.{self._order_by}"
+        elif self._limit is not None and self._limit > 0:
+            # Adiciona ORDER BY automático para permitir paginação
+            query += f" ORDER BY {main_alias}.RECID"
+        
+        # Aplica LIMIT/OFFSET se definido (SQL Server: OFFSET/FETCH)
+        if self._limit is not None and self._limit > 0:
             query += f" OFFSET {offset} ROWS FETCH NEXT {limit} ROWS ONLY"
         
         ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #3 / made by: Nicolas Santos / created: 27/02/2026 '''
