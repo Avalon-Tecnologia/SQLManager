@@ -486,11 +486,17 @@ class AutoRouter:
         
     def _handle_get(self, table: TableController, path_parts: List[str], params: Dict, config: Dict):        
         try:
+            # Debug timing (remover depois)
+            import time as time_module
+            start_time = time_module.time()
+            
             field_map = self._get_field_map()
             relation_names = self._get_relation_names(table)
             
             # Verifica se deve incluir relations (opt-in para performance)
             include_relations = params.get('include_relations', '').lower() in ('true', '1', 'yes')
+            
+            print(f"[DEBUG] Field map took: {time_module.time() - start_time:.3f}s")
 
             # Rota: GET /{table}/{id}
             if path_parts and path_parts[0].isdigit():                                
@@ -591,8 +597,10 @@ class AutoRouter:
                 
                 select_query = select_query.limit(limit).offset(offset)
                 select_query.execute()
+                print(f"[DEBUG] Query execution (with filter) took: {time_module.time() - start_time:.3f}s")
         else:
             # Monta query com ordem CORRETA: select -> relations -> limit/offset
+            query_start = time_module.time()
             select_query = table.select()
             
             # Relations APENAS se requisitado (performance!)
@@ -601,21 +609,25 @@ class AutoRouter:
             
             select_query = select_query.limit(limit).offset(offset)
             select_query.execute()
+            print(f"[DEBUG] Query execution (no filter) took: {time_module.time() - query_start:.3f}s")
 
-        # Calcula total de registros (pode ser desabilitado para performance)
-        if params.get('no_count', '').lower() in ('true', '1', 'yes'):
-            total = -1  # Indica que count foi pulado
-        else:
-            total = self._get_table_total(table, where_condition)
-        
         # SLICE DEFENSIVO: garante que NUNCA retorna mais que o limit
+        serialize_start = time_module.time()
         records_to_serialize = table.records[:limit] if len(table.records) > limit else table.records
         data = [self._serialize(r, field_map) for r in records_to_serialize]
+        print(f"[DEBUG] Serialization took: {time_module.time() - serialize_start:.3f}s")
         
-        meta = {"page": page, "limit": limit, "count": len(data)}
-        if total != -1:
-            meta["total"] = total
+        # Total é DESABILITADO por padrão (performance em tabelas grandes!)
+        # Use ?include_total=true se precisar do count total
+        if params.get('include_total', '').lower() in ('true', '1', 'yes'):
+            count_start = time_module.time()
+            total = self._get_table_total(table, where_condition)
+            print(f"[DEBUG] Count query took: {time_module.time() - count_start:.3f}s")
+            meta = {"page": page, "limit": limit, "count": len(data), "total": total}
+        else:
+            meta = {"page": page, "limit": limit, "count": len(data)}
         
+        print(f"[DEBUG] TOTAL request took: {time_module.time() - start_time:.3f}s")
         return {
             "status": 200, 
             "data": data,
