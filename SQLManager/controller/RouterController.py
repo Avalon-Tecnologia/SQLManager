@@ -721,7 +721,7 @@ class AutoRouter:
         """
         Descobre todas as tabelas disponíveis no TablePack para geração de documentação.
         """
-        tables = []
+        tables = set()  # Usa set para evitar duplicatas
         # Tenta diferentes estruturas de projeto (Tables e Views)
         possible_modules = [
             ("model.TablePack", False),      # Estrutura padrão SQLManager
@@ -766,11 +766,12 @@ class AutoRouter:
                 
                 try:
                     attr = getattr(module, name)
-                    if isinstance(attr, type):
-                        tables.append(name)
+                    if isinstance(attr, type) and name not in tables:  # Evita duplicatas
+                        tables.add(name)
                         total_count += 1
-                        # Armazena no cache se é view
-                        self._is_view_cache[name.upper()] = is_view_module
+                        # Armazena no cache se é view (prioriza ViewPack se houver duplicata)
+                        if is_view_module or name.upper() not in self._is_view_cache:
+                            self._is_view_cache[name.upper()] = is_view_module
                 except AttributeError:
                     continue
         
@@ -784,7 +785,7 @@ class AutoRouter:
                     msg += f" ({excluded_count} excluída(s))"
                 print(f"{SystemController.custom_text('[AutoRouter]', 'green')} {msg}")
         
-        return sorted(tables)
+        return sorted(list(tables))  # Converte set para lista ordenada
     
     def get_registered_routes(self) -> Dict[str, List[Dict[str, str]]]:
         """
