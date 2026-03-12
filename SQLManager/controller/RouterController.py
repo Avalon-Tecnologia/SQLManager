@@ -565,25 +565,30 @@ class AutoRouter:
                     case 'neq':  where_condition = (field_attr != value)
                     case 'like': where_condition = field_attr.like(str(value))
                 
-                select_query = table.select().where(where_condition).limit(limit).offset(offset)
+                # Monta query com ordem CORRETA: select -> where -> relations -> limit/offset
+                select_query = table.select().where(where_condition)
                 
-                # Adiciona relations automaticamente se houver (COM LIMITE!)
                 if relation_names:
-                    select_query.with_relations(*relation_names)
+                    select_query = select_query.with_relations(*relation_names)
                 
+                select_query = select_query.limit(limit).offset(offset)
                 select_query.execute()
         else:
-            select_query = table.select().limit(limit).offset(offset)
+            # Monta query com ordem CORRETA: select -> relations -> limit/offset
+            select_query = table.select()
             
-            # Adiciona relations automaticamente se houver (COM LIMITE!)
             if relation_names:
-                select_query.with_relations(*relation_names)
+                select_query = select_query.with_relations(*relation_names)
             
+            select_query = select_query.limit(limit).offset(offset)
             select_query.execute()
 
         # Calcula total de registros (para paginação correta)
         total = self._get_table_total(table, where_condition)
-        data = [self._serialize(r, field_map) for r in table.records]
+        
+        # SLICE DEFENSIVO: garante que NUNCA retorna mais que o limit
+        records_to_serialize = table.records[:limit] if len(table.records) > limit else table.records
+        data = [self._serialize(r, field_map) for r in records_to_serialize]
         
         return {
             "status": 200, 
@@ -654,14 +659,17 @@ class AutoRouter:
                 
                 # Instancia e executa select
                 table = TableClass(self.db)
-                table.select().limit(limit).execute()
+                select_query = table.select()
+                select_query = select_query.limit(limit)
+                select_query.execute()
                 
-                # Serializa usando field map
+                # Serializa usando field map (COM SLICE DEFENSIVO)
                 temp_table = self.current_table
                 self.current_table = table
                 field_map = self._get_field_map()
                 
-                results[table_name] = [self._serialize_simple(r, field_map) for r in table.records]
+                records_to_serialize = table.records[:limit] if len(table.records) > limit else table.records
+                results[table_name] = [self._serialize_simple(r, field_map) for r in records_to_serialize]
                 self.current_table = temp_table
                 
             except Exception as e:
