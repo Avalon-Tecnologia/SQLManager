@@ -70,6 +70,7 @@ class REGEX (EDT_Utils):
             "onlyNumbers": r"^[0-9]+$",
             "password": r"^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$",
             "url": r"^(https?:\/\/)?([\w.-]+)\.([a-z]{2,})([\/\w.-]*)*\/?$",
+            "sequences": r"^([a-zA-Z0-9]{1,5}|[^\w#]|[0-9]{2,8}|[a-zA-Z0-9]{1,5}(?:-[a-zA-Z0-9]{1,5})*)$"
         }
         ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 23/02/2026 '''
         

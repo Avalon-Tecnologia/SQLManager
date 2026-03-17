@@ -1,7 +1,7 @@
 ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''
 from ..CoreConfig  import CoreConfig
 from ..connection  import database_connection as data
-from ..controller  import ViewController, TableController,EDTController, BaseEnumController
+from ..controller  import ViewController, TableController,EDTController, BaseEnumController, NumberSequenceController
 
 from typing import Self
 from SQLManager import BaseEnumController
@@ -36,6 +36,6 @@ class Recid(EDTController):
     def __init__(self, value: EDTController.any_type = 0):
         super().__init__("onlyNumbers", DataType.Number, value)
 
-__all__ = ["DataType", "Recid", "ViewController", "TableController", "EDTController", "BaseEnumController", "data", "CoreConfig"]
+__all__ = ["DataType", "Recid", "ViewController", "TableController", "EDTController", "BaseEnumController", "NumberSequenceController", "data", "CoreConfig"]
 
 ''' [END CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 25/02/2026 '''

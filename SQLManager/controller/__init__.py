@@ -2,6 +2,7 @@ from .EDTController      import EDTController
 from .BaseEnumController import BaseEnumController
 from .TableController    import TableController
 from .SystemController   import SystemController
+from .NumberSequenceController import NumberSequenceController
 
 ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 23/02/2026 '''
 
@@ -17,6 +18,7 @@ __all__ = [
     'TableController',
     'ViewController',
     'SystemController',
+    'NumberSequenceController',
     'WebSocketManager'
 ]
 ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 23/02/2026 '''

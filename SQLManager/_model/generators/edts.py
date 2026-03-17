@@ -1,4 +1,3 @@
-''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #6 / made by: Nicolas Santos / created: 26/02/2026 '''
 
 """
 Por meio deste arquivo adicionar todos os EDTs (Extended Data Types) que são chaves do SQLManager, como Recid, TransDate, etc.
@@ -63,4 +62,3 @@ class CreateDateTime(EDTController):
         super().__init__("datetime", DataType.DateTime, value)
 ''',
 }
-''' [END CODE] Project: SQLManager Version 4.0 / issue: #6 / made by: Nicolas Santos / created: 26/02/2026 '''

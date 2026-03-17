@@ -1,5 +1,5 @@
 from .connection import database_connection
-from .controller import EDTController, BaseEnumController, TableController, SystemController, ViewController
+from .controller import EDTController, BaseEnumController, TableController, SystemController, ViewController, NumberSequenceController
 from .CoreConfig import CoreConfig
 
 ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #3 / made by: Nicolas Santos / created: 27/02/2026 '''
@@ -12,6 +12,7 @@ __all__ = [
     "TableController",
     "ViewController",
     "SystemController",
+    "NumberSequenceController",
     "CoreConfig",    
     "AutoRouter"
 ]
