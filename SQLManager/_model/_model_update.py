@@ -39,6 +39,7 @@ class ModelUpdater:
             query = f"""
             CREATE TABLE {name} ({content})
             """
+            
             self.db.doQuery(query)
 
     def ensurer(self, ref_Path: Path, content: str):
