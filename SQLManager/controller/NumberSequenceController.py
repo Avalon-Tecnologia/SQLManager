@@ -1,4 +1,3 @@
-#[BEGIN CODE] Project: SQLManager / Issue #2 / made by: {Heitor Rolim} / created: {05/03/2026}
 import traceback
 
 class NumberSequenceController:
@@ -7,7 +6,6 @@ class NumberSequenceController:
         self.Header     = Head
         self.Lines      = Line
         self.seqTypes   = seqTypes
-
 
     def getNextNum(self, reference: int) -> str:
         """
@@ -151,7 +149,7 @@ class NumberSequenceController:
         parts = self.Lines.records
         ret = [""] * len(parts)
         for each in parts:
-            if each["PIECETYPE"] == self.seqTypes.NUMERIC.value: 
+            if each["PIECETYPE"] == self.seqTypes.ALPHANUMERIC.value: 
                 ret[each["LINENUM"]-1] = str(number).rjust(padding, "0")
             else:
                 ret[each["LINENUM"]-1] = each["SEQPIECE"]
@@ -222,7 +220,7 @@ class NumberSequenceController:
             self.Header.SEQUENCEID  = header["SEQUENCEID"]
             self.Header.NAMEALIAS   = header["NAMEALIAS"]
             self.Header.DESCRIPTION = header["DESCRIPTION"]
-            self.Header.ISDISABLE   = header["ISDISABLE"]
+            self.Header.ISDISABLE   = header.get("ISDISABLE", 0)
             self.Header.MINNUM      = header["MINNUM"]
             self.Header.MAXNUM      = header["MAXNUM"]
             self.Header.PREVNUM     = header["MINNUM"] - 1
@@ -233,12 +231,12 @@ class NumberSequenceController:
 
             for each in lines:
                 self.Lines.REFRECID  = self.Header.RECID.value
-                if each["PIECETYPE"] == self.seqTypes.NUMERIC.value: #TODO: colocar o ENUM pra usar de alfaNum para poder arrumar o padding
-                    self.Lines.PIECETYPE = each["PIECETYPE"]
+                if self.seqTypes.find_by_value(each["PIECETYPE"]) == self.seqTypes.ALPHANUMERIC.value: #TODO: colocar o ENUM pra usar de alfaNum para poder arrumar o padding
+                    self.Lines.PIECETYPE = self.seqTypes.find_by_value(each["PIECETYPE"])
                     self.Lines.SEQPIECE  = None
                     self.Lines.LINENUM   = each["LINENUM"]
                 else:
-                    self.Lines.PIECETYPE = each["PIECETYPE"]
+                    self.Lines.PIECETYPE = self.seqTypes.find_by_value(each["PIECETYPE"])
                     self.Lines.SEQPIECE  = each["SEQPIECE"]
                     self.Lines.LINENUM   = each["LINENUM"]
 
@@ -309,39 +307,39 @@ class NumberSequenceController:
             Se lista de linhas está vazia, retorna erro sem fazer alterações.
         """
         try:
-            self.Header.select().where(self.Header.RECID == reference).execute()
+            self.Header.select().where(self.Header.RECID == reference).join(self.Lines, 'INNER').on(self.Header.RECID == self.Lines.REFRECID).execute()
             if not self.Header.records or not self.Lines.records:
                 return {"status": False, "message": "No sequence found"}
             self.Header.SelectForUpdate(True)
-            self.Header.SEQUENCEID  = changes.get("SEQUENCEID"   , self.Header.SEQUENCEID)
-            self.Header.NAMEALIAS   = changes.get("NAMEALIAS"    , self.Header.NAMEALIAS)
-            self.Header.DESCRIPTION = changes.get("DESCRIPTION"    , self.Header.DESCRIPTION)
-            self.Header.ISDISABLE   = changes.get("ISDISABLE"   , self.Header.ISDISABLE)
-            self.Header.MINNUM      = changes.get("MINNUM"  , self.Header.MINNUM)
-            self.Header.MAXNUM      = changes.get("MAXNUM"  , self.Header.MAXNUM)
-            self.Header.PREVNUM     = changes.get("PREVNUM" , self.Header.PREVNUM)
-            self.Header.CURNUM      = changes.get("CURNUM"  , self.Header.CURNUM)
-            self.Header.NEXTNUM     = changes.get("NEXTNUM" , self.Header.NEXTNUM)  
+            self.Header.SEQUENCEID  = changes["HEAD"].get("SEQUENCEID"   , self.Header.SEQUENCEID)
+            self.Header.NAMEALIAS   = changes["HEAD"].get("NAMEALIAS"    , self.Header.NAMEALIAS)
+            self.Header.DESCRIPTION = changes["HEAD"].get("DESCRIPTION"    , self.Header.DESCRIPTION)
+            self.Header.ISDISABLE   = changes["HEAD"].get("ISDISABLE"   , self.Header.ISDISABLE)
+            self.Header.MINNUM      = changes["HEAD"].get("MINNUM"  , self.Header.MINNUM)
+            self.Header.MAXNUM      = changes["HEAD"].get("MAXNUM"  , self.Header.MAXNUM)
+            self.Header.PREVNUM     = changes["HEAD"].get("PREVNUM" , self.Header.PREVNUM)
+            self.Header.CURNUM      = changes["HEAD"].get("CURNUM"  , self.Header.CURNUM)
+            self.Header.NEXTNUM     = changes["HEAD"].get("NEXTNUM" , self.Header.NEXTNUM)  
             self.Header.update()
 
-            if changes["lines"] and len(changes["lines"]) == 0:
-                return {"status": False, "message": "No changes to be made"}
-            
-            for each in changes["lines"]:
-                self.Lines.select().where((self.Lines.REFRECID == reference | self.Lines.LINENUM == each["LINENUM"])).execute()
-                self.Lines.SelectForUpdate(True)
+            if changes["LINES"] and len(changes["LINES"]) != 0:
+                for each in changes["LINES"]:
+                    self.Lines.select().where((self.Lines.REFRECID == reference) & (self.Lines.LINENUM == each["LINENUM"])).execute()
+                    if(self.Lines.PIECETYPE != self.seqTypes.find_by_value(each["PIECETYPE"]) or
+                       self.Lines.SEQPIECE != each["SEQPIECE"] or
+                       self.Lines.LINENUM != each["LINENUM"]):
+                        self.Lines.SelectForUpdate(True)
 
-                if each["PIECETYPE"] == self.seqTypes.NUMERIC.value:
-                    self.Lines.PIECETYPE = each["PIECETYPE"]
-                    self.Lines.SEQPIECE = None
-                    self.Lines.LINENUM = each["LINENUM"]
-                else:
-                    self.Lines.PIECETYPE = each["PIECETYPE"]
-                    self.Lines.SEQPIECE = each["SEQPIECE"]
-                    self.Lines.LINENUM = each["LINENUM"]
+                        if each["PIECETYPE"] == self.seqTypes.ALPHANUMERIC.value:
+                            self.Lines.PIECETYPE = self.seqTypes.find_by_value(each["PIECETYPE"])
+                            self.Lines.SEQPIECE = None
+                            self.Lines.LINENUM = each["LINENUM"]
+                        else:
+                            self.Lines.PIECETYPE = self.seqTypes.find_by_value(each["PIECETYPE"])
+                            self.Lines.SEQPIECE = each["SEQPIECE"]
+                            self.Lines.LINENUM = each["LINENUM"]
 
-                self.Lines.update()
-
+                        self.Lines.update()
             return {"status": True, "message": "update made suscessfully"}
         except Exception as e:
             traceback.print_exc()
@@ -382,7 +380,7 @@ class NumberSequenceController:
             return {"status": False, "message": "invalid reference"}
         
         try:
-            self.Header.select().where(self.Header.RECID == reference).join(self.Lines, 'INNER').on(self.Header.RECID == self.Lines.REFRECID)
+            self.Header.select().where(self.Header.RECID == reference).join(self.Lines, 'INNER').on(self.Header.RECID == self.Lines.REFRECID).execute()
             if not self.Header.records or not self.Lines.records:
                 return{"status": False, "message": "no sequence found"}
             
@@ -446,5 +444,3 @@ class NumberSequenceController:
         except Exception as e:
             traceback.print_exc()
             return {"status": False, "message": f"Unable to delete due to: {e}"}
-
-#[END CODE] Project: SQLManager / Issue #2 / made by: {Heitor Rolim} / created: {05/03/2026}
