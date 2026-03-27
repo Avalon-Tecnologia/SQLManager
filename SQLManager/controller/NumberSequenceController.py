@@ -1,3 +1,4 @@
+#[BEGIN CODE] Project: SQLManager / Issue #2 / made by: {Heitor Rolim} / created: {05/03/2026}
 import traceback
 
 class NumberSequenceController:
@@ -6,6 +7,7 @@ class NumberSequenceController:
         self.Header     = Head
         self.Lines      = Line
         self.seqTypes   = seqTypes
+
 
     def getNextNum(self, reference: int) -> str:
         """
@@ -329,15 +331,9 @@ class NumberSequenceController:
                        self.Lines.SEQPIECE != each["SEQPIECE"] or
                        self.Lines.LINENUM != each["LINENUM"]):
                         self.Lines.SelectForUpdate(True)
-
-                        if each["PIECETYPE"] == self.seqTypes.ALPHANUMERIC.value:
-                            self.Lines.PIECETYPE = self.seqTypes.find_by_value(each["PIECETYPE"])
-                            self.Lines.SEQPIECE = None
-                            self.Lines.LINENUM = each["LINENUM"]
-                        else:
-                            self.Lines.PIECETYPE = self.seqTypes.find_by_value(each["PIECETYPE"])
-                            self.Lines.SEQPIECE = each["SEQPIECE"]
-                            self.Lines.LINENUM = each["LINENUM"]
+                        self.Lines.PIECETYPE = self.seqTypes.find_by_value(each["PIECETYPE"])
+                        self.Lines.SEQPIECE = each["SEQPIECE"]
+                        self.Lines.LINENUM = each["LINENUM"]
 
                         self.Lines.update()
             return {"status": True, "message": "update made suscessfully"}
@@ -444,3 +440,5 @@ class NumberSequenceController:
         except Exception as e:
             traceback.print_exc()
             return {"status": False, "message": f"Unable to delete due to: {e}"}
+
+#[END CODE] Project: SQLManager / Issue #2 / made by: {Heitor Rolim} / created: {05/03/2026}
