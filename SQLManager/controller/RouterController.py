@@ -464,39 +464,51 @@ class AutoRouter:
         if not hasattr(table, 'relations') or not table.relations:
             return
 
-        parent_recids = []
-        for rec in parent_records:
-            recid = rec.get('RECID') if isinstance(rec, dict) else getattr(rec, 'RECID', None)
-            if hasattr(recid, 'value'):
-                recid = recid.value
-            if recid is not None:
-                parent_recids.append(recid)
-
-        if not parent_recids:
-            return
-
         for rel_name, relation_manager in table.relations.items():
             try:
                 child_instance = relation_manager.ref_table_class(self.db)
 
+                # ← Pega o campo SOURCE do pai (ex: self.RECID)
+                source_field = relation_manager.source_field
+                if isinstance(source_field, str):
+                    source_field_name = source_field
+                else:
+                    source_field_name = getattr(source_field, '_field_name', None) or getattr(source_field, 'field_name', None)
+
+                # ← Pega o campo TARGET do filho (ex: "REFRECID")
                 target_field = relation_manager.target_field
                 if isinstance(target_field, str):
                     target_field_name = target_field
                 else:
                     target_field_name = getattr(target_field, '_field_name', None) or getattr(target_field, 'field_name', None)
 
-                if not target_field_name:
+                if not source_field_name or not target_field_name:
                     continue
 
+                # ← Coleta os valores do campo SOURCE em cada record pai
+                parent_values = []
+                for rec in parent_records:
+                    if isinstance(rec, dict):
+                        val = rec.get(source_field_name)
+                    else:
+                        val = getattr(rec, source_field_name, None)
+                        if hasattr(val, 'value'):
+                            val = val.value
+                    if val is not None:
+                        parent_values.append(val)
+
+                if not parent_values:
+                    continue
+
+                # ← Filtra a filha pelo campo TARGET com os valores coletados
                 child_field = child_instance.field(target_field_name)
 
-                # ← Sempre busca todos de uma vez com OR encadeado, evitando in_()
-                if len(parent_recids) == 1:
-                    condition = (child_field == parent_recids[0])
+                if len(parent_values) == 1:
+                    condition = (child_field == parent_values[0])
                 else:
-                    condition = (child_field == parent_recids[0])
-                    for recid in parent_recids[1:]:
-                        condition = condition | (child_field == recid)
+                    condition = (child_field == parent_values[0])
+                    for val in parent_values[1:]:
+                        condition = condition | (child_field == val)
 
                 child_instance.select().where(condition).execute()
                 relation_manager.set_records(child_instance.records)
