@@ -12,6 +12,8 @@ from .ViewController    import ViewController
 from .WebSocketManager  import WebSocketManager
 ''' [END CODE] Project: SQLManager Version 4.0 / issue: #7 / made by: Nicolas Santos / created: 12/03/2026 '''
 
+from.databaseWatchController import DatabaseWatcher
+
 __all__ = [
     'EDTController',
     'BaseEnumController',
@@ -19,6 +21,7 @@ __all__ = [
     'ViewController',
     'SystemController',
     'NumberSequenceController',
-    'WebSocketManager'
+    'WebSocketManager',
+    'DatabaseWatcher'
 ]
 ''' [BEGIN CODE] Project: SQLManager Version 4.0 / issue: #4 / made by: Nicolas Santos / created: 23/02/2026 '''
