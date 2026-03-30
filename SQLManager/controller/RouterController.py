@@ -845,8 +845,18 @@ class AutoRouter:
             max_relations: Máximo de records de relations a incluir (evita sobrecarga)
             include_relations: Se True, inclui relations filtradas por este record
         """
+        import datetime
+        def convert_value(val):
+            if isinstance(val, datetime.datetime):
+                return val.isoformat()
+            if isinstance(val, datetime.date):
+                return val.isoformat()
+            if isinstance(val, datetime.time):
+                return val.isoformat()
+            return val
+
         if isinstance(record_obj, dict):
-            record_dict = record_obj
+            record_dict = {k: convert_value(v) for k, v in record_obj.items()}
         else:
             record_dict = {}
             # Itera apenas sobre os campos mapeados da tabela
@@ -854,7 +864,7 @@ class AutoRouter:
                 try:
                     val = getattr(record_obj, real_name)
                     if callable(val): continue
-                    record_dict[real_name] = val
+                    record_dict[real_name] = convert_value(val)
                 except:
                     pass
         
