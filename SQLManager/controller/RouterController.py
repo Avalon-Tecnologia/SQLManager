@@ -767,16 +767,18 @@ class AutoRouter:
 
         try:
             field_map = self._get_field_map()
-            # 1. Carrega o registro atual
+            # 1. Seta flag de update para garantir update correto
+            table.SelectForUpdate(True)
+            # 2. Carrega o registro atual
             table.select().where(table.RECID == recid).execute()
             if not table.records:
                 return {"status": 404, "error": "Record not found"}
-            # 2. Atualiza os campos recebidos
+            # 3. Atualiza os campos recebidos
             for key, value in body.items():
                 real_field_name = field_map.get(key.upper())
                 if real_field_name and real_field_name != 'RECID':
                     setattr(table, real_field_name, value)
-            # 3. Chama update customizado
+            # 4. Chama update customizado
             updated = table.update()
             if updated:
                 # Broadcast WebSocket (automático)
