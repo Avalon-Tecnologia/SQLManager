@@ -1,4 +1,3 @@
-#[BEGIN CODE] Project: SQLManager / Issue #2 / made by: {Heitor Rolim} / created: {05/03/2026}
 import traceback
 
 class NumberSequenceController:
@@ -87,7 +86,7 @@ class NumberSequenceController:
             return {"message": "Reference cannot be zero"}
         
         try:
-            self.Header.select().where(self.Header.RECID == reference).join(self.Lines).on(self.Header.RECID == self.Lines.REFRECID).order_by(self.Lines.LINENUM).execute()
+            self.Header.select().where(self.Header.RECID == reference).join(self.Lines).on(self.Header.RECID == self.Lines.REFRECID).execute()
             if not self.Header.records or not self.Lines.records:
                 return {"message": "Sequence not found"}
             
@@ -146,15 +145,15 @@ class NumberSequenceController:
         if parts == None:
             if not self.Lines.records:
                 return {"message": "Unable to find a suitable sequence to formar"}
+            parts = self.Lines.records
             print("formating stored sequence")    
 
-        parts = self.Lines.records
         ret = [""] * len(parts)
         for each in parts:
             if each["PIECETYPE"] == self.seqTypes.ALPHANUMERIC.value: 
-                ret[each["LINENUM"]-1] = str(number).rjust(padding, "0")
+                ret[each["LINENUM"]] = str(number).rjust(padding, "0")
             else:
-                ret[each["LINENUM"]-1] = each["SEQPIECE"]
+                ret[each["LINENUM"]] = each["SEQPIECE"]
         
         return "".join(ret)
 
@@ -440,5 +439,3 @@ class NumberSequenceController:
         except Exception as e:
             traceback.print_exc()
             return {"status": False, "message": f"Unable to delete due to: {e}"}
-
-#[END CODE] Project: SQLManager / Issue #2 / made by: {Heitor Rolim} / created: {05/03/2026}
