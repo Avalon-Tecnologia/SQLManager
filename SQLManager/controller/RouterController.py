@@ -310,7 +310,7 @@ class AutoRouter:
             def table_list():
                 method = request.method
                 query_params = request.args.to_dict()
-                body = request.get_json() if request.is_json else {}
+                body = request.get_json(force=True, silent=True) or {}
                 
                 result = self.handle_request(
                     method=method,
@@ -334,7 +334,7 @@ class AutoRouter:
             def table_detail(resource_path):
                 method = request.method
                 query_params = request.args.to_dict()
-                body = request.get_json() if request.is_json else {}
+                body = request.get_json(force=True, silent=True) or {}
                 
                 # Divide o path (pode ser ID ou rota customizada)
                 path_parts = resource_path.split('/') if resource_path else []
