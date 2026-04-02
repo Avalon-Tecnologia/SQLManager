@@ -500,13 +500,22 @@ class AutoRouter:
                 if not parent_values:
                     continue
 
-                # ← Filtra a filha pelo campo TARGET com os valores coletados
+                # ← OTIMIZAÇÃO: Processa em batches para evitar milhares de parâmetros
                 child_field = child_instance.field(target_field_name)
-                
-                condition = child_field.in_(parent_values)
+                batch_size = 500  # Limite seguro para a maioria dos DBs
+                all_child_records = []
 
-                child_instance.select().where(condition).execute()
-                relation_manager.set_records(child_instance.records)
+                # Divide em lotes de 500 valores
+                for i in range(0, len(parent_values), batch_size):
+                    batch = parent_values[i:i + batch_size]
+                    condition = child_field.in_(batch)
+                    
+                    child_instance.select().where(condition).execute()
+                    all_child_records.extend(child_instance.records)
+                    child_instance.clear()  # Limpa para próximo batch
+
+                # Define todos os registros filhos de uma vez
+                relation_manager.set_records(all_child_records)
 
             except Exception as e:
                 print(f"[AutoRouter] Erro ao popular relation '{rel_name}': {e}")
