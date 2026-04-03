@@ -75,6 +75,17 @@ class FieldCondition:
             right_prefix = f"{self.right_table_alias}." if self.right_table_alias else ""
             sql = f"{prefix}{self.field_name} {self.operator} {right_prefix}{self.right_field_name}"
             return (sql, [])  # Sem valores para binding
+        
+        # Tratamento especial para operadores IN e NOT IN com listas
+        if self.operator in ('IN', 'NOT IN') and isinstance(self.value, (list, tuple)):
+            if not self.value:  # Lista vazia
+                # IN com lista vazia sempre é falso, NOT IN sempre é verdadeiro
+                sql = "1=0" if self.operator == 'IN' else "1=1"
+                return (sql, [])
+            
+            placeholders = ', '.join(['?' for _ in self.value])
+            sql = f"{prefix}{self.field_name} {self.operator} ({placeholders})"
+            return (sql, list(self.value))
                 
         sql = f"{prefix}{self.field_name} {self.operator} ?"
         return (sql, self.value)
